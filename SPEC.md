@@ -13,41 +13,122 @@ LLM(Upstage Solar API)의 출력이 알고리즘의 입력으로 연결되는 �
 
 ---
 
+## 구현 진행 상황
+
+### Backend — 알고리즘 (algorithms/)
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| hash_table.py | **DONE** | djb2 해시 + 체이닝 충돌 처리, set/get/delete/exists/values |
+| bst.py | **DONE** | BST insert/delete/inorder/range_query (타임라인용) |
+| trie.py | **DONE** | Trie insert/search/delete (자동완성용) |
+| kmp.py | **DONE** | KMP failure function + 문자열 매칭 |
+| heap.py | **DONE** | Max-Heap push/pop/top_k (추천 Top-K용) |
+| graph.py | **DONE** | Graph + BFS 추천 + Dijkstra 경로 (소셜 그래프용) |
+
+### Backend — Core (core/)
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| models.py | **DONE** | User, Post, Comment dataclass 정의 |
+| store.py | **DONE** | 전역 인메모리 스토어 (HashTable, BST, Trie, Graph 인스턴스) |
+| solar.py | **DONE** | Solar API 클라이언트 (async, fail-safe) |
+
+### Backend — 라우터 (routers/)
+
+| 파일 | 상태 | 엔드포인트 |
+|------|------|-----------|
+| users.py | **DONE** | 회원가입, 프로필 조회/수정, 팔로우/언팔로우, 친구 목록 |
+| posts.py | **DONE** | 게시글 CRUD, 좋아요, 피드(Following), 전체 게시글(For You) |
+| comments.py | **DONE** | 루트 댓글/대댓글 작성, 삭제, DFS 트리 조회 |
+| search.py | **DONE** | 유저 자동완성(Trie), 게시글 검색(KMP), 키워드 확장(Solar) |
+| recommend.py | **DONE** | 게시글 추천(Heap Top-K), 사람 추천(BFS), 인맥 경로(Dijkstra) |
+
+### Backend — 기타
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| main.py | **DONE** | FastAPI 앱 + CORS + 라우터 등록 + 서버 시작 시 자동 시드 |
+| seed.py | **DONE** | 25명 유저, 100개 게시글, 125개 팔로우, 31개 댓글+대댓글 |
+
+### Frontend — 페이지
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| HomePage.tsx | **DONE** | 로그인/회원가입 (탭 전환 방식) |
+| FeedPage.tsx | **DONE** | For You(전체 게시글) / Following(팔로잉 피드) 탭 |
+| ProfilePage.tsx | **DONE** | 프로필 조회, Bio 수정, 팔로우/언팔로우, 유저 게시글 목록 |
+| SearchPage.tsx | **DONE** | Users(Trie) / Posts(KMP) / Expand(Solar) 탭 |
+| FriendsPage.tsx | **DONE** | Following / Followers / Discover(BFS추천) / Connection(Dijkstra경로) |
+| PostDetailPage.tsx | **DONE** | 게시글 상세, 좋아요, 댓글 트리(DFS), 대댓글 |
+
+### Frontend — 기타
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| api.ts | **DONE** | Backend API 클라이언트 (fetch 기반) |
+| App.tsx | **DONE** | 라우팅, 네비게이션 바, 로그인 상태 관리 |
+| index.css | **DONE** | 전체 UI 스타일링 (카드, 버튼, 탭, 댓글 트리 등) |
+
+### 테스트
+
+| 파일 | 상태 | 설명 |
+|------|------|------|
+| test_hash_table.py | **DONE** | HashTable CRUD, 충돌 처리, values() |
+| test_bst.py | **DONE** | BST insert/delete/inorder/range_query |
+| test_trie.py | **DONE** | Trie insert/search/delete |
+| test_kmp.py | **DONE** | KMP 문자열 매칭 |
+| test_heap.py | **DONE** | MaxHeap push/pop/top_k |
+| test_graph.py | **DONE** | Graph BFS/Dijkstra |
+| test_integration.py | **DONE** | API 엔드포인트 통합 테스트 |
+
+---
+
 ## 프로젝트 구조
 
 ```
 algosns/
 ├── backend/
-│   ├── main.py                   # FastAPI 앱 진입점, CORS 설정
+│   ├── main.py                   # FastAPI 앱 진입점 (자동 시드 로드)
+│   ├── seed.py                   # 더미 데이터 시딩 (25유저, 100게시글)
 │   ├── core/
-│   │   ├── models.py             # User, Post, Comment dataclass 정의
+│   │   ├── models.py             # User, Post, Comment dataclass
 │   │   ├── store.py              # 전역 인메모리 스토어 (싱글턴)
-│   │   └── solar.py             # Solar API 클라이언트
+│   │   └── solar.py              # Solar API 클라이언트
+│   ├── routers/
+│   │   ├── users.py              # 프로필, 팔로우/언팔로우, 친구 목록
+│   │   ├── posts.py              # 게시글 CRUD, 피드, 전체 게시글
+│   │   ├── comments.py           # 댓글 트리 (DFS)
+│   │   ├── search.py             # 검색 (Trie + KMP + Solar)
+│   │   └── recommend.py          # 추천 (Heap + BFS + Dijkstra)
 │   └── algorithms/
-│       ├── hash_table.py         # Hash Table 직접 구현
-│       ├── bst.py                # BST 직접 구현
-│       ├── trie.py               # Trie 직접 구현
-│       ├── kmp.py                # KMP 문자열 매칭 직접 구현
-│       ├── heap.py               # Max-Heap 직접 구현
-│       └── graph.py              # Graph + BFS + Dijkstra 직접 구현
-│
+│       ├── hash_table.py         # Hash Table (djb2, chaining)
+│       ├── bst.py                # BST (타임라인)
+│       ├── trie.py               # Trie (자동완성)
+│       ├── kmp.py                # KMP (문자열 매칭)
+│       ├── heap.py               # Max-Heap (Top-K)
+│       └── graph.py              # Graph + BFS + Dijkstra
 ├── tests/
 │   ├── test_hash_table.py
 │   ├── test_bst.py
 │   ├── test_trie.py
 │   ├── test_kmp.py
 │   ├── test_heap.py
-│   └── test_graph.py
-│
-├── frontend/                     # 3주차에 채움
-│   └── .gitkeep
-│
-├── .env                          # SOLAR_API_KEY (git 제외)
-├── .env.example                  # API 키 템플릿
-└── .gitignore
+│   ├── test_graph.py
+│   └── test_integration.py
+└── frontend/
+    └── src/
+        ├── api.ts                # API 클라이언트
+        ├── App.tsx               # 라우터, 네비게이션
+        ├── index.css             # 글로벌 스타일
+        └── pages/
+            ├── HomePage.tsx      # 로그인/회원가입
+            ├── FeedPage.tsx      # For You / Following 피드
+            ├── ProfilePage.tsx   # 프로필
+            ├── SearchPage.tsx    # 검색
+            ├── FriendsPage.tsx   # 친구 (팔로잉/팔로워/추천/경로)
+            └── PostDetailPage.tsx # 게시글 상세 + 댓글
 ```
-
-> **주의**: `routers/` 폴더는 3주차에 생성. 2주차에는 위 구조만 잡는다.
 
 ---
 
@@ -232,8 +313,6 @@ class Graph:
 
 ## 기능별 API 명세
 
-> **주의**: 라우터 파일(`backend/routers/`)은 3주차에 생성.
-
 ### Feature 1 — 프로필 (Profile)
 
 **자료구조**: Hash Table | **알고리즘**: Hashing | **Solar**: 관심사 태그 추출
@@ -242,7 +321,7 @@ class Graph:
 POST   /users/register              유저 등록 (username, bio)
 GET    /users/{username}            프로필 조회 — HashTable.get(username)
 PATCH  /users/{username}/bio        소개글 수정 → Solar로 관심사 태그 재추출
-GET    /users/{username}/feed       해당 유저 팔로잉들의 피드
+GET    /users/{username}/friends    팔로잉/팔로워 목록 조회
 ```
 
 **등록 로직**:
@@ -267,9 +346,11 @@ GET    /users/{username}/feed       해당 유저 팔로잉들의 피드
 
 ```
 POST   /posts                       게시글 작성
+GET    /posts/all                   전체 게시글 조회 (For You 피드)
+GET    /posts/{post_id}             게시글 상세 조회
 DELETE /posts/{post_id}             게시글 삭제
 POST   /posts/{post_id}/like        좋아요 토글
-GET    /feed/{username}             피드 조회 (시간순)
+GET    /feed/{username}             팔로잉 피드 조회 (Following 탭)
 ```
 
 **작성 로직**:
@@ -281,7 +362,7 @@ GET    /feed/{username}             피드 조회 (시간순)
 **피드 조회 로직**:
 1. following 목록 조회
 2. `feed_tree.inorder()` → 시간순 post_id 목록
-3. following 유저 post만 필터링 후 반환
+3. following 유저 post만 필터링 후 최신순 반환
 
 **Solar 프롬프트**:
 ```
@@ -391,6 +472,34 @@ def get_comment_tree(comment_id: str) -> dict:
 
 ---
 
+## 시드 데이터 (`backend/seed.py`)
+
+서버 시작 시 `main.py`의 `on_startup` 이벤트에서 자동 로드됨.
+
+| 항목 | 수량 |
+|------|------|
+| 유저 | 25명 (다양한 관심사: 카페, 개발, 운동, 음악, 요리, 게임, 패션, 영화 등) |
+| 게시글 | 100개 (유저당 4개, 해시태그 포함) |
+| 팔로우 관계 | 125개 (밀도 높은 소셜 그래프) |
+| 댓글 | 31개 (루트 댓글 + 대댓글) |
+
+시드 유저: `jimin`, `subin`, `minjun`, `yuna`, `dongho`, `soyeon`, `hyunwoo`, `eunji`, `taehyung`, `minji`, `jihoon`, `hayoung`, `seojin`, `woojin`, `nayeon`, `chanwoo`, `soojin`, `jungwon`, `dahyun`, `sunwoo`, `arin`, `gunwoo`, `yerin`, `taemin`, `chaeyoung`
+
+---
+
+## Frontend 페이지 구성
+
+| 페이지 | 경로 | 기능 | 사용 알고리즘 |
+|--------|------|------|-------------|
+| HomePage | `/` | 로그인/회원가입 (탭 전환) | Hash Table (유저 조회) |
+| FeedPage | `/feed/:username` | For You(전체) / Following(팔로잉) 피드 | BST (시간순 정렬) |
+| ProfilePage | `/profile/:username` | 프로필, Bio 수정, 팔로우 | Hash Table, Solar |
+| SearchPage | `/search` | 유저 검색 / 게시글 검색 / 키워드 확장 | Trie, KMP, Solar |
+| FriendsPage | `/friends/:username` | 팔로잉/팔로워/추천친구/인맥경로 | BFS, Dijkstra |
+| PostDetailPage | `/post/:postId` | 게시글 상세, 좋아요, 댓글 트리 | DFS (댓글 순회) |
+
+---
+
 ## Solar API 클라이언트 (`backend/core/solar.py`)
 
 ```python
@@ -414,33 +523,10 @@ async def chat(prompt: str) -> str:
         return res.json()["choices"][0]["message"]["content"]
 
 # Solar 실패 시 빈 리스트 반환 (fail-safe)
-async def extract_interests(bio: str) -> list[str]:
-    try:
-        result = await chat(f"다음 소개글에서 관심사 키워드를 최대 5개 추출해. JSON 배열로만 답해.\n소개글: {bio}")
-        return json.loads(result)
-    except:
-        return []
-
-async def extract_hashtags(content: str) -> list[str]:
-    try:
-        result = await chat(f"다음 게시글에서 해시태그를 정확히 3개 추출해. # 없이 JSON 배열로만 답해.\n내용: {content}")
-        return json.loads(result)
-    except:
-        return []
-
-async def expand_keywords(keyword: str) -> list[str]:
-    try:
-        result = await chat(f"'{keyword}'와 관련된 검색 키워드를 5개 추천해. JSON 배열로만 답해.")
-        return json.loads(result)
-    except:
-        return []
-
-async def analyze_interests(bio: str, posts_sample: str) -> list[str]:
-    try:
-        result = await chat(f"사용자의 소개글과 최근 게시글을 분석해서 관심사 키워드를 최대 7개 추출해. JSON 배열로만 답해.\n소개글: {bio}\n최근 게시글: {posts_sample}")
-        return json.loads(result)
-    except:
-        return []
+async def extract_interests(bio: str) -> list[str]: ...
+async def extract_hashtags(content: str) -> list[str]: ...
+async def expand_keywords(keyword: str) -> list[str]: ...
+async def analyze_interests(bio: str, posts_sample: str) -> list[str]: ...
 ```
 
 ---
@@ -452,20 +538,6 @@ async def analyze_interests(bio: str, posts_sample: str) -> list[str]:
 SOLAR_API_KEY=your_api_key_here
 ```
 
-`.env.example`:
-```
-SOLAR_API_KEY=
-```
-
-`.gitignore`:
-```
-.env
-__pycache__/
-*.pyc
-node_modules/
-.DS_Store
-```
-
 ---
 
 ## 실행 방법
@@ -475,29 +547,40 @@ node_modules/
 cd backend
 pip install fastapi uvicorn httpx python-dotenv
 uvicorn main:app --reload --port 8000
+# → 서버 시작 시 시드 데이터 자동 로드
 
-# Frontend (3주차 이후)
+# Frontend
 cd frontend
 npm install
 npm run dev
+# → http://localhost:5173
+
+# Tests
+cd algosns
+python -m pytest tests/ -v
 ```
 
 ---
 
-## 구현 순서
+## 알고리즘 — 기능 대응표
 
-### 2주차 (현재)
-1. 레포 세팅 + 프로젝트 구조 생성
-2. `backend/algorithms/` — 6개 알고리즘 직접 구현
-3. `tests/` — 각 알고리즘 단위 테스트 (`pytest` 전부 통과 목표)
-4. `backend/core/models.py`, `store.py`, `solar.py` 작성
+| 알고리즘 / 자료구조 | 적용 기능 | 구현 파일 | 시간 복잡도 |
+|-------------------|---------|----------|----------|
+| Hash Table (djb2 + chaining) | 유저/게시글/댓글 저장 | algorithms/hash_table.py | O(1) avg |
+| BST | 피드 타임라인 정렬 | algorithms/bst.py | O(log n) insert, O(n) inorder |
+| Trie | 유저 자동완성, 태그 prefix | algorithms/trie.py | O(m + k) search |
+| KMP | 게시글 본문 키워드 매칭 | algorithms/kmp.py | O(n + m) |
+| Max-Heap | 추천 게시글 Top-K | algorithms/heap.py | O(n log k) |
+| Graph + BFS | 사람 추천 (2-hop) | algorithms/graph.py | O(V + E) |
+| Graph + Dijkstra | 인맥 경로 | algorithms/graph.py | O((V+E) log V) |
+| N-ary Tree + DFS | 댓글 트리 조회 | routers/comments.py | O(n) |
+| Inverted Index | 해시태그 → 게시글 역인덱스 | core/store.py | O(1) lookup |
 
-### 3주차
-5. `backend/routers/` 폴더 생성 후 라우터 6개 구현
-6. `frontend/` React 앱 세팅 + 페이지별 UI
-7. Frontend ↔ Backend API 연동
+### Solar API 연동 지점
 
-### 4주차
-8. 통합 테스트 + 버그 수정
-9. 더미 데이터 시딩 스크립트 작성
-10. README, 발표 슬라이드 작성
+| 호출 위치 | 입력 | 출력 | 연결되는 알고리즘 |
+|---------|-----|-----|----------------|
+| 유저 등록 / bio 수정 | 소개글 | 관심사 태그 (최대 5개) | Hash Table 저장, Graph 가중치 |
+| 게시글 작성 | 게시글 내용 | 해시태그 (3개) | Inverted Index 등록 |
+| 게시글 추천 | bio + 최근 게시글 | 관심사 태그 (최대 7개) | Max-Heap 스코어링 입력 |
+| 키워드 확장 검색 | 검색어 | 관련 키워드 (5개) | Trie + KMP 재탐색 |
