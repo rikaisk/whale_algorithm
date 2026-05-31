@@ -83,7 +83,7 @@ function CommentNode({
           )}
         </div>
         {showReply && (
-          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+          <div style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
             <input
               className="ig-input"
               style={{ padding: "5px 10px", fontSize: 12 }}
@@ -92,8 +92,27 @@ function CommentNode({
               placeholder={`@${authorName} 에게 답글...`}
               onKeyDown={(e) => e.key === "Enter" && submitReply()}
             />
-            <button onClick={submitReply} style={{ color: "var(--ig-accent)", fontWeight: 600, fontSize: 13 }}>
-              게시
+            <button
+              onClick={submitReply}
+              disabled={!replyText.trim()}
+              title="답글 게시"
+              style={{
+                background: replyText.trim() ? "var(--ig-accent)" : "#e0e0e0",
+                color: "#fff",
+                width: 26,
+                height: 26,
+                flexShrink: 0,
+                borderRadius: "50%",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: replyText.trim() ? "pointer" : "default",
+                transition: "background 0.15s",
+              }}
+            >
+              ↑
             </button>
           </div>
         )}

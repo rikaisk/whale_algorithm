@@ -17,11 +17,20 @@ from core import persistence
 async def lifespan(app: FastAPI):
     persistence.load_all()
     try:
-        from routers.admin import seed_ai_users_fallback_only
+        from routers.admin import (
+            seed_ai_users_fallback_only,
+            backfill_ai_post_images,
+            backfill_ai_user_interests,
+        )
         seeded = seed_ai_users_fallback_only()
-        if seeded:
+        backfilled = backfill_ai_post_images()
+        interests_fixed = backfill_ai_user_interests()
+        if seeded or backfilled or interests_fixed:
             persistence.save_all()
-            print(f"[startup] Auto-seeded AI users: {seeded}")
+            print(
+                f"[startup] Auto-seeded AI users: {seeded}; "
+                f"backfilled images: {backfilled}; interests: {interests_fixed}"
+            )
     except Exception as e:
         print(f"[startup] Auto-seed skipped: {e}")
     yield

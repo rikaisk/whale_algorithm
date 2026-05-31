@@ -6,6 +6,8 @@ import {
   getMe,
   setToken,
   getToken,
+  getInterestCategories,
+  type InterestCategory,
 } from "./api/client";
 import Avatar from "./components/Avatar";
 import FeedPage from "./pages/FeedPage";
@@ -31,12 +33,16 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [input, setInput] = useState("");
   const [password, setPassword] = useState("");
-  const [bio, setBio] = useState("");
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("feed");
   const [profileTarget, setProfileTarget] = useState("");
+  const [chatPeer, setChatPeer] = useState("");
   const [loading, setLoading] = useState(false);
+  // 회원가입 관심 분야 선택 단계
+  const [regStep, setRegStep] = useState<0 | 1>(0);
+  const [categories, setCategories] = useState<InterestCategory[]>([]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
   useEffect(() => {
     const token = getToken();
@@ -75,11 +81,32 @@ export default function App() {
     }
   };
 
-  const register = async () => {
+  // 1단계(유저명/비밀번호) 통과 → 관심 분야 선택 단계로
+  const goToInterestStep = async () => {
+    setError("");
+    if (!input.trim() || password.length < 4) return;
+    setRegStep(1);
+    if (categories.length === 0) {
+      try {
+        setCategories(await getInterestCategories());
+      } catch {
+        setCategories([]);
+      }
+    }
+  };
+
+  const toggleInterest = (label: string) => {
+    setSelectedInterests((prev) =>
+      prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
+    );
+  };
+
+  // 최종 가입 (interests=[] 이면 '넘어가기'와 동일 → 무작위 추천)
+  const register = async (interests: string[]) => {
     setError("");
     setLoading(true);
     try {
-      await registerUser(input.trim(), password, bio.trim());
+      await registerUser(input.trim(), password, interests);
       const res = await apiLogin(input.trim(), password);
       setToken(res.token);
       setUsername(res.username);
@@ -87,6 +114,8 @@ export default function App() {
       setLoggedIn(true);
       setProfileTarget(res.username);
       setPassword("");
+      setRegStep(0);
+      setSelectedInterests([]);
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? "등록에 실패했습니다.");
     } finally {
@@ -101,7 +130,8 @@ export default function App() {
     setUserId("");
     setInput("");
     setPassword("");
-    setBio("");
+    setRegStep(0);
+    setSelectedInterests([]);
   };
 
   const openProfile = (target: string) => {
@@ -109,13 +139,119 @@ export default function App() {
     setTab("profile");
   };
 
+  // 프로필의 '메시지 보내기' → 해당 유저와 메시지 탭에서 바로 대화
+  const openChat = (target: string) => {
+    setChatPeer(target);
+    setTab("chat");
+  };
+
   if (!loggedIn) {
     const isLogin = mode === "login";
     const submitForm = () => {
       if (loading || !input.trim() || password.length < 4) return;
       if (isLogin) login();
-      else register();
+      else goToInterestStep();
     };
+
+    // 회원가입 2단계: 관심 분야 선택
+    if (!isLogin && regStep === 1) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            background: "var(--ig-bg)",
+          }}
+        >
+          <div
+            className="ig-card ig-fade-in"
+            style={{ width: "100%", maxWidth: 440, padding: "32px 28px" }}
+          >
+            <h2 style={{ textAlign: "center", margin: "0 0 6px", fontSize: 22 }}>
+              관심 분야를 골라주세요
+            </h2>
+            <p
+              style={{
+                textAlign: "center",
+                margin: "0 0 20px",
+                fontSize: 13,
+                color: "var(--ig-text-muted)",
+              }}
+            >
+              고른 분야와 어울리는 친구와 게시물을 추천해드려요.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                justifyContent: "center",
+                marginBottom: 24,
+              }}
+            >
+              {categories.map((c) => {
+                const on = selectedInterests.includes(c.label);
+                return (
+                  <button
+                    key={c.label}
+                    onClick={() => toggleInterest(c.label)}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: 20,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      border: on
+                        ? "1.5px solid transparent"
+                        : "1.5px solid var(--ig-border)",
+                      background: on ? "var(--ig-grad-cta)" : "#fff",
+                      color: on ? "#fff" : "var(--ig-text)",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {c.emoji} {c.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              className="ig-btn-primary"
+              disabled={loading || selectedInterests.length === 0}
+              onClick={() => register(selectedInterests)}
+              style={{ width: "100%", padding: "10px 0", borderRadius: 8 }}
+            >
+              {loading
+                ? "처리 중..."
+                : selectedInterests.length > 0
+                ? `${selectedInterests.length}개 선택 · 가입 완료`
+                : "관심 분야를 선택하세요"}
+            </button>
+            <button
+              onClick={() => register([])}
+              disabled={loading}
+              style={{
+                width: "100%",
+                marginTop: 10,
+                color: "var(--ig-text-muted)",
+                fontSize: 14,
+                fontWeight: 600,
+                padding: "6px 0",
+              }}
+            >
+              넘어가기
+            </button>
+            {error && (
+              <p style={{ color: "var(--ig-danger)", fontSize: 13, marginTop: 12, textAlign: "center" }}>
+                {error}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         style={{
@@ -162,29 +298,13 @@ export default function App() {
               onKeyDown={(e) => e.key === "Enter" && submitForm()}
               placeholder="비밀번호 (4자 이상)"
             />
-            {!isLogin && (
-              <textarea
-                className="ig-input ig-fade-in"
-                style={{ resize: "vertical", minHeight: 64 }}
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submitForm();
-                  }
-                }}
-                placeholder="자기소개 (Shift+Enter 줄바꿈, Enter 제출)"
-                rows={2}
-              />
-            )}
             <button
               className="ig-btn-primary"
               disabled={loading || !input.trim() || password.length < 4}
-              onClick={isLogin ? login : register}
+              onClick={isLogin ? login : goToInterestStep}
               style={{ marginTop: 8, padding: "10px 0", borderRadius: 8 }}
             >
-              {loading ? "처리 중..." : isLogin ? "로그인" : "가입하기"}
+              {loading ? "처리 중..." : isLogin ? "로그인" : "다음"}
             </button>
           </div>
           {error && (
@@ -307,7 +427,15 @@ export default function App() {
         {tab === "feed" && <FeedPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
         {tab === "search" && <SearchPage currentUserId={userId} currentUsername={username} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
         {tab === "recommend" && <RecommendPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
-        {tab === "chat" && <ChatPage username={username} userId={userId} onOpenProfile={openProfile} />}
+        {tab === "chat" && (
+          <ChatPage
+            username={username}
+            userId={userId}
+            onOpenProfile={openProfile}
+            initialPeer={chatPeer}
+            onPeerConsumed={() => setChatPeer("")}
+          />
+        )}
         {tab === "profile" && (
           <ProfilePage
             targetUsername={profileTarget || username}
@@ -315,6 +443,7 @@ export default function App() {
             currentUserId={userId}
             currentAvatar={myAvatar}
             onOpenProfile={openProfile}
+            onOpenChat={openChat}
           />
         )}
       </main>

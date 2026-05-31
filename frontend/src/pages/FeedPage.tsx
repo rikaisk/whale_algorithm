@@ -80,7 +80,7 @@ export default function FeedPage({
       setComposerOpen(false);
       await load();
     } catch (e: any) {
-      setError(e?.response?.data?.detail ?? "게시글 작성에 실패했습니다.");
+      setError(e?.response?.data?.detail ?? "게시물 작성에 실패했습니다.");
     } finally {
       setLoading(false);
     }

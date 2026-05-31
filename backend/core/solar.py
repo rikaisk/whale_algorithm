@@ -10,12 +10,23 @@ def is_configured() -> bool:
     return bool(SOLAR_API_KEY and SOLAR_API_KEY.strip())
 
 
-async def chat(prompt: str, temperature: float = 0.3, system: str | None = None) -> str:
+async def chat(
+    prompt: str,
+    temperature: float = 0.3,
+    system: str | None = None,
+    history: list[dict] | None = None,
+) -> str:
     if not is_configured():
         raise RuntimeError("SOLAR_API_KEY is not configured")
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
+    # 이전 대화 맥락 (LLM 세션처럼 이어서 답하기 위함)
+    for turn in (history or []):
+        role = turn.get("role")
+        content = (turn.get("content") or turn.get("text") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": prompt})
     async with httpx.AsyncClient() as client:
         res = await client.post(
@@ -130,18 +141,21 @@ async def generate_post_for_persona(persona_name: str, persona_bio: str) -> str:
         return ""
 
 
-async def chatbot_answer(question: str, context: str) -> str:
+async def chatbot_answer(
+    question: str, context: str, history: list[dict] | None = None
+) -> str:
     if not is_configured():
         return "Solar API 키가 설정되지 않아 답변할 수 없습니다. 관리자에게 문의해주세요."
     try:
         system = (
-            "너는 WhaleGram 가이드 봇이야. 사용자가 묻는 질문에 대해 아래 컨텍스트를 바탕으로 답해. "
-            "WhaleGram은 알고리즘 수업 과제로 만들어진 SNS이고, AI 더미 유저들이 함께 활동해. "
+            "너는 WhaleGram 가이드 봇이야. 아래 컨텍스트를 바탕으로 앱 사용법과 기능을 안내해. "
+            "WhaleGram은 직접 구현한 자료구조와 Solar LLM을 결합한 SNS이고, AI 더미 유저들이 함께 활동해. "
+            "이전 대화 맥락이 있으면 자연스럽게 이어서 답해. "
             "친절하고 간결하게 2-4문장으로 한국어로 답하고, 모르는 것은 모른다고 솔직히 말해. "
             "이모지를 적절히 써."
+            f"\n=== 컨텍스트 ===\n{context}"
         )
-        prompt = f"=== 컨텍스트 ===\n{context}\n=== 질문 ===\n{question}"
-        return await chat(prompt, temperature=0.5, system=system)
+        return await chat(question, temperature=0.5, system=system, history=history)
     except Exception as e:
         print(f"[solar.chatbot] failed: {type(e).__name__}: {e}")
         return "(잠시 후 다시 시도해주세요)"

@@ -18,7 +18,7 @@ MAX_AVATAR_BYTES = 1_000_000
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    bio: str
+    interests: Optional[list[str]] = None
 
 
 class BioUpdateRequest(BaseModel):
@@ -44,12 +44,13 @@ async def register(req: RegisterRequest):
     if user_store.exists(req.username):
         raise HTTPException(status_code=409, detail="Username already exists")
 
-    interests = await solar.extract_interests(req.bio)
+    # 회원가입 시 선택한 관심 분야를 그대로 저장 (자기소개 입력 단계 제거됨)
+    interests = [i.strip() for i in (req.interests or []) if i and i.strip()]
     user = User(
         id=str(uuid.uuid4()),
         username=req.username,
         password_hash=auth.hash_password(req.password),
-        bio=req.bio,
+        bio="",
         interests=interests,
         following=[],
         followers=[],

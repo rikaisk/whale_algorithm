@@ -120,12 +120,29 @@ export const userExists = async (username: string): Promise<boolean> => {
   }
 };
 
-export const askChatbot = (question: string): Promise<{ answer: string }> =>
-  api.post("/chatbot/ask", { question }).then((r) => r.data);
+export type BotTurn = { role: "user" | "assistant"; content: string };
+
+export const askChatbot = (
+  question: string,
+  history: BotTurn[] = [],
+): Promise<{ answer: string }> =>
+  api.post("/chatbot/ask", { question, history }).then((r) => r.data);
+
+export interface InterestCategory {
+  label: string;
+  emoji: string;
+}
+
+export const getInterestCategories = (): Promise<InterestCategory[]> =>
+  api.get("/admin/interest_categories").then((r) => r.data);
 
 // Profile
-export const registerUser = (username: string, password: string, bio: string) =>
-  api.post("/users/register", { username, password, bio }).then((r) => r.data);
+export const registerUser = (
+  username: string,
+  password: string,
+  interests: string[] = [],
+) =>
+  api.post("/users/register", { username, password, interests }).then((r) => r.data);
 
 export const getProfile = (username: string): Promise<User> =>
   api.get(`/users/${username}`).then((r) => r.data);
@@ -167,6 +184,22 @@ export const recommendPeople = (username: string) =>
 
 export const recommendPath = (from: string, to: string) =>
   api.get(`/recommend/path/${from}/${to}`).then((r) => r.data);
+
+export interface ClosestPerson {
+  user_id: string;
+  username: string;
+  is_ai: boolean;
+  bio: string;
+  distance: number;
+  hops: number;
+  path: string[];
+  shared_interests: string[];
+}
+
+export const recommendClosest = (
+  username: string,
+): Promise<{ results: ClosestPerson[] }> =>
+  api.get(`/recommend/closest/${username}`).then((r) => r.data);
 
 export const followUser = (username: string, target: string) =>
   api.post(`/users/${username}/follow/${target}`).then((r) => r.data);

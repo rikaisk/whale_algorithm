@@ -1,15 +1,33 @@
 import { useEffect, useState } from "react";
-import type { Post } from "../api/client";
+import type { Post, ClosestPerson } from "../api/client";
 import {
   recommendPosts,
   recommendPeople,
-  recommendPath,
+  recommendClosest,
   followUser,
 } from "../api/client";
 import PostCard from "../components/PostCard";
 import Avatar from "../components/Avatar";
 
-type Tab = "posts" | "people" | "path";
+type Tab = "posts" | "people" | "closest";
+
+interface PostSection {
+  reason: string;
+  title: string;
+  posts: Post[];
+}
+interface PersonItem {
+  user_id: string;
+  username: string;
+  is_ai?: boolean;
+  bio?: string;
+  common_friends?: number;
+}
+interface PeopleSection {
+  reason: string;
+  title: string;
+  people: PersonItem[];
+}
 
 export default function RecommendPage({
   username,
@@ -22,24 +40,21 @@ export default function RecommendPage({
   currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
 }) {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [postSections, setPostSections] = useState<PostSection[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
-  const [people, setPeople] = useState<
-    { user_id: string; username: string; common_friends: number; followed?: boolean }[]
-  >([]);
-  const [pathFrom, setPathFrom] = useState(username);
-  const [pathTo, setPathTo] = useState("");
-  const [path, setPath] = useState<string[] | null>(null);
-  const [pathError, setPathError] = useState("");
+  const [peopleSections, setPeopleSections] = useState<PeopleSection[]>([]);
+  const [closest, setClosest] = useState<ClosestPerson[]>([]);
+  const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [loadedTabs, setLoadedTabs] = useState<Set<Tab>>(new Set());
   const [activeTab, setActiveTab] = useState<Tab>("posts");
 
   const loadPosts = async () => {
     setLoading(true);
     try {
       const res = await recommendPosts(username);
-      setPosts(res.results);
-      setInterests(res.interests_used);
+      setPostSections(res.sections || []);
+      setInterests(res.interests || []);
     } finally {
       setLoading(false);
     }
@@ -49,38 +64,35 @@ export default function RecommendPage({
     setLoading(true);
     try {
       const res = await recommendPeople(username);
-      setPeople(res.map((p: any) => ({ ...p, followed: false })));
+      setPeopleSections(res.sections || []);
     } finally {
       setLoading(false);
     }
   };
 
-  const findPath = async () => {
-    if (!pathFrom.trim() || !pathTo.trim()) return;
-    setPathError("");
+  const loadClosest = async () => {
     setLoading(true);
     try {
-      const res = await recommendPath(pathFrom, pathTo);
-      setPath(res.path);
-    } catch (e: any) {
-      setPath([]);
-      setPathError(e?.response?.data?.detail ?? "경로를 찾을 수 없습니다.");
+      const res = await recommendClosest(username);
+      setClosest(res.results || []);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (activeTab === "posts" && posts.length === 0) loadPosts();
-    if (activeTab === "people" && people.length === 0) loadPeople();
+    if (loadedTabs.has(activeTab)) return;
+    setLoadedTabs((prev) => new Set(prev).add(activeTab));
+    if (activeTab === "posts") loadPosts();
+    if (activeTab === "people") loadPeople();
+    if (activeTab === "closest") loadClosest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const handleFollow = async (target: string) => {
     try {
       await followUser(username, target);
-      setPeople((prev) =>
-        prev.map((p) => (p.username === target ? { ...p, followed: true } : p)),
-      );
+      setFollowed((prev) => new Set(prev).add(target));
     } catch {}
   };
 
@@ -96,11 +108,87 @@ export default function RecommendPage({
           fontWeight: active ? 700 : 600,
           fontSize: 13,
           letterSpacing: 0.5,
-          textTransform: "uppercase",
         }}
       >
         {label}
       </button>
+    );
+  };
+
+  const sectionHeader = (title: string) => (
+    <div
+      style={{
+        fontWeight: 700,
+        fontSize: 14,
+        color: "var(--ig-text)",
+        padding: "0 4px 8px",
+        marginTop: 4,
+      }}
+    >
+      {title}
+    </div>
+  );
+
+  const personRow = (u: PersonItem) => {
+    const isFollowed = followed.has(u.username);
+    return (
+      <div
+        key={u.user_id}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 14px",
+          borderTop: "1px solid var(--ig-border-soft)",
+        }}
+      >
+        <Avatar
+          username={u.username}
+          size={44}
+          onClick={onOpenProfile ? () => onOpenProfile(u.username) : undefined}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            onClick={onOpenProfile ? () => onOpenProfile(u.username) : undefined}
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: onOpenProfile ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            {u.username}
+            {u.is_ai && (
+              <span className="ig-chip ig-chip-tag" style={{ fontSize: 10 }}>
+                AI
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              color: "var(--ig-text-muted)",
+              fontSize: 12,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {typeof u.common_friends === "number"
+              ? `공통 친구 ${u.common_friends}명`
+              : u.bio || ""}
+          </div>
+        </div>
+        <button
+          onClick={() => handleFollow(u.username)}
+          disabled={isFollowed}
+          className={isFollowed ? "ig-btn-secondary" : "ig-btn-primary"}
+          style={{ padding: "6px 14px", fontSize: 13 }}
+        >
+          {isFollowed ? "팔로잉" : "팔로우"}
+        </button>
+      </div>
     );
   };
 
@@ -115,17 +203,20 @@ export default function RecommendPage({
           gap: 24,
         }}
       >
-        {tabBtn("posts", "✨ 게시글")}
+        {tabBtn("posts", "✨ 게시물")}
         {tabBtn("people", "👥 사람")}
-        {tabBtn("path", "🔗 인맥경로")}
+        {tabBtn("closest", "🧭 가까운 친구")}
       </div>
 
       {activeTab === "posts" && (
         <>
           {interests.length > 0 && (
-            <div className="ig-card" style={{ padding: 12, marginBottom: 14, background: "#f0fdf4", borderColor: "#bbf7d0" }}>
+            <div
+              className="ig-card"
+              style={{ padding: 12, marginBottom: 14, background: "#f0fdf4", borderColor: "#bbf7d0" }}
+            >
               <div style={{ color: "#15803d", fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                🤖 Solar AI가 분석한 관심사
+                💚 내 관심 분야
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {interests.map((t) => (
@@ -148,142 +239,169 @@ export default function RecommendPage({
           )}
           {loading ? (
             <div style={{ textAlign: "center", padding: 40, color: "var(--ig-text-muted)" }}>분석 중...</div>
-          ) : posts.length === 0 ? (
+          ) : postSections.length === 0 ? (
             <div style={{ textAlign: "center", padding: 40, color: "var(--ig-text-muted)" }}>
               <div style={{ fontSize: 48, marginBottom: 8 }}>🤔</div>
-              <p style={{ margin: 0 }}>아직 추천할 게시글이 없습니다.</p>
+              <p style={{ margin: 0 }}>아직 추천할 게시물이 없습니다.</p>
             </div>
           ) : (
-            posts.map((p) => (
-              <PostCard
-                key={p.id}
-                post={p}
-                currentUserId={userId}
-                currentUsername={username}
-                currentAvatar={currentAvatar}
-                onOpenProfile={onOpenProfile}
-              />
+            postSections.map((sec) => (
+              <div key={sec.reason + sec.title} style={{ marginBottom: 12 }}>
+                {sectionHeader(sec.title)}
+                {sec.posts.map((p) => (
+                  <PostCard
+                    key={p.id}
+                    post={p}
+                    currentUserId={userId}
+                    currentUsername={username}
+                    currentAvatar={currentAvatar}
+                    onOpenProfile={onOpenProfile}
+                  />
+                ))}
+              </div>
             ))
           )}
         </>
       )}
 
       {activeTab === "people" && (
-        <div className="ig-card">
-          <div
-            style={{
-              padding: "12px 14px",
-              borderBottom: "1px solid var(--ig-border-soft)",
-              fontWeight: 600,
-              fontSize: 14,
-            }}
-          >
-            회원님이 알 수도 있는 사람
-          </div>
+        <>
           {loading ? (
             <p style={{ padding: 40, textAlign: "center", color: "var(--ig-text-muted)" }}>분석 중...</p>
-          ) : people.length === 0 ? (
+          ) : peopleSections.length === 0 ? (
             <p style={{ padding: 40, textAlign: "center", color: "var(--ig-text-muted)" }}>
               추천할 사람이 없습니다.
             </p>
           ) : (
-            people.map((u) => (
-              <div
-                key={u.user_id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 14px",
-                  borderTop: "1px solid var(--ig-border-soft)",
-                }}
-              >
-                <Avatar
-                  username={u.username}
-                  size={44}
-                  onClick={onOpenProfile ? () => onOpenProfile(u.username) : undefined}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    onClick={onOpenProfile ? () => onOpenProfile(u.username) : undefined}
-                    style={{ fontWeight: 600, fontSize: 14, cursor: onOpenProfile ? "pointer" : "default" }}
-                  >
-                    {u.username}
-                  </div>
-                  <div style={{ color: "var(--ig-text-muted)", fontSize: 12 }}>
-                    공통 친구 {u.common_friends}명
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleFollow(u.username)}
-                  disabled={u.followed}
-                  className={u.followed ? "ig-btn-secondary" : "ig-btn-primary"}
-                  style={{ padding: "6px 14px", fontSize: 13 }}
+            peopleSections.map((sec) => (
+              <div key={sec.reason + sec.title} className="ig-card" style={{ marginBottom: 16 }}>
+                <div
+                  style={{
+                    padding: "12px 14px",
+                    borderBottom: "1px solid var(--ig-border-soft)",
+                    fontWeight: 600,
+                    fontSize: 14,
+                  }}
                 >
-                  {u.followed ? "팔로잉" : "팔로우"}
-                </button>
+                  {sec.title}
+                </div>
+                {sec.people.map((u) => personRow(u))}
               </div>
             ))
           )}
-        </div>
+        </>
       )}
 
-      {activeTab === "path" && (
-        <div className="ig-card" style={{ padding: 16 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>인맥 경로 찾기</h3>
-          <p style={{ margin: "0 0 14px", fontSize: 13, color: "var(--ig-text-muted)" }}>
-            두 유저 간의 최단 친구 경로를 Dijkstra 알고리즘으로 계산합니다.
-          </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 14 }}>
-            <input
-              className="ig-input"
-              value={pathFrom}
-              onChange={(e) => setPathFrom(e.target.value)}
-              placeholder="출발 유저명"
-            />
-            <input
-              className="ig-input"
-              value={pathTo}
-              onChange={(e) => setPathTo(e.target.value)}
-              placeholder="도착 유저명"
-              onKeyDown={(e) => e.key === "Enter" && findPath()}
-            />
-            <button
-              className="ig-btn-primary"
-              onClick={findPath}
-              disabled={loading || !pathFrom.trim() || !pathTo.trim()}
-              style={{ padding: "8px 16px" }}
-            >
-              찾기
-            </button>
+      {activeTab === "closest" && (
+        <div>
+          <div
+            className="ig-card"
+            style={{ padding: 14, marginBottom: 14, background: "#eef2ff", borderColor: "#c7d2fe" }}
+          >
+            <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#3730a3" }}>
+              🧭 가까운 친구 찾기 (Dijkstra)
+            </h3>
+            <p style={{ margin: 0, fontSize: 13, color: "#4338ca", lineHeight: 1.5 }}>
+              팔로우 관계를 따라, <b>공통 관심사가 많을수록 가까운 사이</b>로 보는 가중치로
+              나와의 최단 거리를 계산해 가장 가까운 사람부터 추천해요.
+            </p>
           </div>
-          {pathError && <p style={{ color: "var(--ig-danger)", fontSize: 13, margin: 0 }}>{pathError}</p>}
-          {path && path.length > 0 && (
-            <div
-              className="ig-fade-in"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexWrap: "wrap",
-                marginTop: 6,
-              }}
-            >
-              {path.map((u, i) => (
-                <div key={`${u}-${i}`} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {loading ? (
+            <p style={{ padding: 40, textAlign: "center", color: "var(--ig-text-muted)" }}>계산 중...</p>
+          ) : closest.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: "var(--ig-text-muted)" }}>
+              <div style={{ fontSize: 48, marginBottom: 8 }}>🧭</div>
+              <p style={{ margin: "0 0 4px" }}>아직 연결된 사람이 없어요.</p>
+              <p style={{ margin: 0, fontSize: 13 }}>
+                누군가를 팔로우하면 그 친구의 친구들까지 거리순으로 추천해드려요.
+              </p>
+            </div>
+          ) : (
+            <div className="ig-card">
+              {closest.map((c, i) => {
+                const isFollowed = followed.has(c.username);
+                return (
                   <div
-                    onClick={onOpenProfile ? () => onOpenProfile(u) : undefined}
-                    style={{ display: "flex", alignItems: "center", gap: 6, cursor: onOpenProfile ? "pointer" : "default" }}
+                    key={c.user_id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "12px 14px",
+                      borderTop: i === 0 ? "none" : "1px solid var(--ig-border-soft)",
+                    }}
                   >
-                    <Avatar username={u} size={32} />
-                    <span style={{ fontWeight: 600, fontSize: 14 }}>{u}</span>
+                    <div
+                      style={{
+                        width: 26,
+                        height: 26,
+                        flexShrink: 0,
+                        borderRadius: "50%",
+                        background: "var(--ig-grad-cta)",
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {i + 1}
+                    </div>
+                    <Avatar
+                      username={c.username}
+                      size={44}
+                      onClick={onOpenProfile ? () => onOpenProfile(c.username) : undefined}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        onClick={onOpenProfile ? () => onOpenProfile(c.username) : undefined}
+                        style={{
+                          fontWeight: 600,
+                          fontSize: 14,
+                          cursor: onOpenProfile ? "pointer" : "default",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        {c.username}
+                        {c.is_ai && (
+                          <span className="ig-chip ig-chip-tag" style={{ fontSize: 10 }}>
+                            AI
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ color: "var(--ig-text-muted)", fontSize: 12, marginTop: 2 }}>
+                        {c.hops}촌 · 친밀도 거리 {c.distance}
+                        {c.shared_interests.length > 0 && (
+                          <> · 공통 관심사 {c.shared_interests.join(", ")}</>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          color: "var(--ig-text-muted)",
+                          fontSize: 11,
+                          marginTop: 3,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        경로: {c.path.join(" → ")}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleFollow(c.username)}
+                      disabled={isFollowed}
+                      className={isFollowed ? "ig-btn-secondary" : "ig-btn-primary"}
+                      style={{ padding: "6px 14px", fontSize: 13, flexShrink: 0 }}
+                    >
+                      {isFollowed ? "팔로잉" : "팔로우"}
+                    </button>
                   </div>
-                  {i < path.length - 1 && <span style={{ color: "var(--ig-text-muted)" }}>→</span>}
-                </div>
-              ))}
-              <span style={{ color: "var(--ig-text-muted)", fontSize: 13, marginLeft: 8 }}>
-                ({path.length - 1}촌)
-              </span>
+                );
+              })}
             </div>
           )}
         </div>

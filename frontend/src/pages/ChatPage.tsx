@@ -23,10 +23,14 @@ export default function ChatPage({
   username,
   userId,
   onOpenProfile,
+  initialPeer,
+  onPeerConsumed,
 }: {
   username: string;
   userId: string;
   onOpenProfile?: (username: string) => void;
+  initialPeer?: string;
+  onPeerConsumed?: () => void;
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [peer, setPeer] = useState<string>("");
@@ -36,9 +40,23 @@ export default function ChatPage({
   const [error, setError] = useState<string>("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
+
+  // 프로필의 '메시지 보내기'로 진입 시 해당 유저와 바로 대화 시작
+  useEffect(() => {
+    const target = (initialPeer || "").trim();
+    if (!target) return;
+    setPeer(target);
+    setPeerInput(target);
+    setError("");
+    setShowSuggestions(false);
+    setSuggestions([]);
+    onPeerConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPeer]);
 
   const refreshConversations = async () => {
     try {
@@ -111,6 +129,7 @@ export default function ChatPage({
         const res = await searchUsers(q);
         const list: string[] = (res.results || []).filter((u: string) => u !== username);
         setSuggestions(list.slice(0, 8));
+        setActiveIndex(-1);
       } catch {
         setSuggestions([]);
       }
@@ -167,7 +186,7 @@ export default function ChatPage({
         margin: "0 auto",
       }}
     >
-      <aside style={{ borderRight: "1px solid var(--ig-border)", display: "flex", flexDirection: "column" }}>
+      <aside style={{ borderRight: "1px solid var(--ig-border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <header style={{ padding: 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>{username}</h3>
         </header>
@@ -179,12 +198,39 @@ export default function ChatPage({
               onChange={(e) => {
                 setPeerInput(e.target.value);
                 setShowSuggestions(true);
+                setActiveIndex(-1);
                 if (error) setError("");
               }}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder="유저명 입력"
-              onKeyDown={(e) => e.key === "Enter" && startConversation()}
+              onKeyDown={(e) => {
+                const list = suggestions;
+                if (showSuggestions && list.length > 0) {
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setActiveIndex((i) => (i + 1) % list.length);
+                    return;
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setActiveIndex((i) => (i <= 0 ? list.length - 1 : i - 1));
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    setShowSuggestions(false);
+                    setActiveIndex(-1);
+                    return;
+                  }
+                }
+                if (e.key === "Enter") {
+                  if (activeIndex >= 0 && activeIndex < list.length) {
+                    startConversation(list[activeIndex]);
+                  } else {
+                    startConversation();
+                  }
+                }
+              }}
             />
             <button
               className="ig-btn-primary"
@@ -215,6 +261,7 @@ export default function ChatPage({
                   key={u}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => startConversation(u)}
+                  onMouseEnter={() => setActiveIndex(i)}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -222,6 +269,7 @@ export default function ChatPage({
                     padding: "8px 12px",
                     width: "100%",
                     textAlign: "left",
+                    background: i === activeIndex ? "rgba(0,0,0,0.05)" : "transparent",
                     borderTop: i === 0 ? "none" : "1px solid var(--ig-border-soft)",
                   }}
                 >
@@ -237,7 +285,7 @@ export default function ChatPage({
             </p>
           )}
         </div>
-        <div className="ig-scrollbar" style={{ flex: 1, overflowY: "auto" }}>
+        <div className="ig-scrollbar" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
           {conversations.length === 0 ? (
             <p style={{ padding: 16, color: "var(--ig-text-muted)", fontSize: 13, textAlign: "center" }}>
               아직 대화가 없습니다.
@@ -285,7 +333,7 @@ export default function ChatPage({
         </div>
       </aside>
 
-      <section style={{ display: "flex", flexDirection: "column", background: "#fff" }}>
+      <section style={{ display: "flex", flexDirection: "column", background: "#fff", minHeight: 0 }}>
         {!peer ? (
           <div
             style={{
@@ -331,6 +379,7 @@ export default function ChatPage({
               className="ig-scrollbar"
               style={{
                 flex: 1,
+                minHeight: 0,
                 overflowY: "auto",
                 padding: 16,
                 display: "flex",

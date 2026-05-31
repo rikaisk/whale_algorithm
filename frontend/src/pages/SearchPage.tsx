@@ -1,7 +1,17 @@
 import { useState, useEffect, useRef } from "react";
-import type { Post } from "../api/client";
+import type { Post, BotTurn } from "../api/client";
 import { searchUsers, searchPosts, askChatbot } from "../api/client";
 import { getHistory, addHistory, removeHistory, type HistoryItem } from "../api/searchHistory";
+import {
+  type BotSession,
+  getSessions,
+  saveSessions,
+  getActiveId,
+  setActiveId,
+  createSession,
+  pickQuestions,
+  titleFromMessage,
+} from "../api/botSessions";
 import PostCard from "../components/PostCard";
 import Avatar from "../components/Avatar";
 
@@ -48,13 +58,73 @@ export default function SearchPage({
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>(getHistory());
 
-  // Chatbot
+  // Chatbot (세션 기반)
   const [botInput, setBotInput] = useState("");
-  const [botMessages, setBotMessages] = useState<{ role: "user" | "bot"; text: string }[]>([]);
   const [botLoading, setBotLoading] = useState(false);
+  const [sessions, setSessions] = useState<BotSession[]>([]);
+  const [activeId, setActiveSessionId] = useState<string>("");
+  const [exampleQs, setExampleQs] = useState<string[]>(() => pickQuestions(4));
+  const [sessionMenuOpen, setSessionMenuOpen] = useState(false);
+  const [sessionActiveIdx, setSessionActiveIdx] = useState(-1);
 
   const debounceRef = useRef<number | null>(null);
   const botBottomRef = useRef<HTMLDivElement | null>(null);
+
+  const activeSession = sessions.find((s) => s.id === activeId) ?? null;
+  const botMessages = activeSession?.messages ?? [];
+
+  // 세션 로드/초기화
+  useEffect(() => {
+    let list = getSessions();
+    let active = getActiveId() ?? "";
+    if (list.length === 0) {
+      const s = createSession();
+      list = [s];
+      active = s.id;
+      saveSessions(list);
+      setActiveId(active);
+    } else if (!list.some((s) => s.id === active)) {
+      active = list[0].id;
+      setActiveId(active);
+    }
+    setSessions(list);
+    setActiveSessionId(active);
+  }, []);
+
+  const persist = (list: BotSession[]) => {
+    setSessions(list);
+    saveSessions(list);
+  };
+
+  const newSession = () => {
+    const s = createSession();
+    const list = [s, ...sessions];
+    persist(list);
+    setActiveSessionId(s.id);
+    setActiveId(s.id);
+    setSessionMenuOpen(false);
+    setExampleQs(pickQuestions(4));
+  };
+
+  const switchSession = (id: string) => {
+    setActiveSessionId(id);
+    setActiveId(id);
+    setSessionMenuOpen(false);
+    setExampleQs(pickQuestions(4));
+  };
+
+  const deleteSession = (id: string) => {
+    let list = sessions.filter((s) => s.id !== id);
+    if (list.length === 0) {
+      const s = createSession();
+      list = [s];
+    }
+    persist(list);
+    if (id === activeId) {
+      setActiveSessionId(list[0].id);
+      setActiveId(list[0].id);
+    }
+  };
 
   useEffect(() => {
     if (tab !== "all") return;
@@ -93,22 +163,48 @@ export default function SearchPage({
     onOpenProfile?.(u);
   };
 
-  const askBot = async () => {
-    const q = botInput.trim();
-    if (!q || botLoading) return;
-    setBotMessages((prev) => [...prev, { role: "user", text: q }]);
+  const askBot = async (question?: string) => {
+    const q = (question ?? botInput).trim();
+    if (!q || botLoading || !activeId) return;
+
+    // 이전 대화 맥락을 history로 전달 (LLM처럼 세션 내 문맥 유지)
+    const history: BotTurn[] = botMessages.map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.text,
+    }));
+
+    const withUser = sessions.map((s) =>
+      s.id === activeId
+        ? {
+            ...s,
+            title: s.messages.length === 0 ? titleFromMessage(q) : s.title,
+            messages: [...s.messages, { role: "user" as const, text: q }],
+            updatedAt: Date.now(),
+          }
+        : s,
+    );
+    persist(withUser);
     setBotInput("");
     setBotLoading(true);
     try {
-      const res = await askChatbot(q);
-      setBotMessages((prev) => [...prev, { role: "bot", text: res.answer }]);
+      const res = await askChatbot(q, history);
+      const withBot = withUser.map((s) =>
+        s.id === activeId
+          ? { ...s, messages: [...s.messages, { role: "bot" as const, text: res.answer }], updatedAt: Date.now() }
+          : s,
+      );
+      persist(withBot);
     } catch {
-      setBotMessages((prev) => [
-        ...prev,
-        { role: "bot", text: "잠시 후 다시 시도해주세요." },
-      ]);
+      const withErr = withUser.map((s) =>
+        s.id === activeId
+          ? { ...s, messages: [...s.messages, { role: "bot" as const, text: "잠시 후 다시 시도해주세요." }] }
+          : s,
+      );
+      persist(withErr);
     } finally {
       setBotLoading(false);
+      // 답변 후에도 예시 질문을 계속, 상황에 따라 무작위로 새로 노출
+      setExampleQs(pickQuestions(4));
     }
   };
 
@@ -164,7 +260,7 @@ export default function SearchPage({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="유저나 게시글 검색 (한글/영문)"
+                placeholder="유저나 게시물 검색 (한글/영문)"
                 style={{ flex: 1, border: "none", background: "transparent", fontSize: 14 }}
                 autoFocus
               />
@@ -335,7 +431,7 @@ export default function SearchPage({
                       padding: "0 4px 8px",
                     }}
                   >
-                    게시글
+                    게시물
                   </div>
                   {postResults.map((p) => (
                     <div
@@ -397,17 +493,162 @@ export default function SearchPage({
             }}
           >
             <span style={{ fontSize: 24 }}>🤖</span>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>WhaleGram 가이드 봇</div>
-              <div style={{ fontSize: 11, opacity: 0.9 }}>
-                AI 유저, 앱 기능, 알고리즘에 대해 물어보세요
+              <div
+                style={{
+                  fontSize: 11,
+                  opacity: 0.9,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {activeSession ? activeSession.title : "앱 기능을 물어보세요"}
               </div>
             </div>
+            {/* 세션 선택 드롭다운 (키보드 위/아래로 선택 가능) */}
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => {
+                  setSessionMenuOpen((o) => !o);
+                  setSessionActiveIdx(-1);
+                }}
+                onKeyDown={(e) => {
+                  if (!sessionMenuOpen && (e.key === "ArrowDown" || e.key === "Enter")) {
+                    setSessionMenuOpen(true);
+                    setSessionActiveIdx(0);
+                    e.preventDefault();
+                    return;
+                  }
+                  if (sessionMenuOpen) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSessionActiveIdx((i) => (i + 1) % sessions.length);
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSessionActiveIdx((i) => (i <= 0 ? sessions.length - 1 : i - 1));
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (sessionActiveIdx >= 0 && sessionActiveIdx < sessions.length) {
+                        switchSession(sessions[sessionActiveIdx].id);
+                      }
+                    } else if (e.key === "Escape") {
+                      setSessionMenuOpen(false);
+                    }
+                  }
+                }}
+                title="대화 기록"
+                style={{
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  padding: "5px 10px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.18)",
+                }}
+              >
+                🕑 기록 ▾
+              </button>
+              {sessionMenuOpen && (
+                <div
+                  className="ig-card"
+                  onMouseLeave={() => setSessionMenuOpen(false)}
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    right: 0,
+                    marginTop: 6,
+                    width: 240,
+                    maxHeight: 280,
+                    overflowY: "auto",
+                    zIndex: 60,
+                    color: "var(--ig-text)",
+                    boxShadow: "var(--ig-shadow-lg)",
+                  }}
+                >
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={newSession}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "10px 12px",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "var(--ig-accent)",
+                      borderBottom: "1px solid var(--ig-border-soft)",
+                    }}
+                  >
+                    ＋ 새 대화
+                  </button>
+                  {sessions.map((s, i) => (
+                    <div
+                      key={s.id}
+                      onMouseEnter={() => setSessionActiveIdx(i)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "8px 10px",
+                        background:
+                          i === sessionActiveIdx
+                            ? "rgba(0,0,0,0.05)"
+                            : s.id === activeId
+                            ? "#f5f5f5"
+                            : "transparent",
+                        borderTop: i === 0 ? "none" : "1px solid var(--ig-border-soft)",
+                      }}
+                    >
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => switchSession(s.id)}
+                        style={{
+                          flex: 1,
+                          textAlign: "left",
+                          fontSize: 13,
+                          fontWeight: s.id === activeId ? 700 : 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {s.title}
+                      </button>
+                      <button
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => deleteSession(s.id)}
+                        title="삭제"
+                        style={{ color: "var(--ig-text-muted)", fontSize: 14, padding: "0 4px" }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={newSession}
+              title="새 대화"
+              style={{
+                color: "#fff",
+                fontSize: 18,
+                fontWeight: 700,
+                padding: "2px 8px",
+                borderRadius: 8,
+                background: "rgba(255,255,255,0.18)",
+              }}
+            >
+              ＋
+            </button>
           </header>
           <div
             className="ig-scrollbar"
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
               padding: 16,
               display: "flex",
@@ -418,22 +659,11 @@ export default function SearchPage({
           >
             {botMessages.length === 0 && (
               <div style={{ textAlign: "center", color: "var(--ig-text-muted)", padding: 20 }}>
-                <p style={{ fontSize: 13, margin: "0 0 12px" }}>예시 질문:</p>
-                {[
-                  "WhaleGram이 뭐야?",
-                  "yuna는 어떤 사람이야?",
-                  "이 앱에서 어떤 알고리즘을 써?",
-                  "팔로우는 어떻게 해?",
-                ].map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => setBotInput(q)}
-                    className="ig-chip"
-                    style={{ margin: 4, cursor: "pointer", fontSize: 12 }}
-                  >
-                    {q}
-                  </button>
-                ))}
+                <div style={{ fontSize: 40, marginBottom: 8 }}>🐳</div>
+                <p style={{ fontSize: 14, margin: "0 0 4px", color: "var(--ig-text)", fontWeight: 600 }}>
+                  무엇이든 물어보세요
+                </p>
+                <p style={{ fontSize: 12, margin: 0 }}>아래 추천 질문을 눌러도 좋아요.</p>
               </div>
             )}
             {botMessages.map((m, i) => (
@@ -483,7 +713,39 @@ export default function SearchPage({
             )}
             <div ref={botBottomRef} />
           </div>
-          <div style={{ padding: 12, borderTop: "1px solid var(--ig-border)" }}>
+          {/* 추천 질문 — 답변 후에도 계속, 상황에 따라 무작위로 변경 */}
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              flexWrap: "wrap",
+              padding: "10px 12px 0",
+              borderTop: "1px solid var(--ig-border-soft)",
+            }}
+          >
+            <span style={{ fontSize: 11, color: "var(--ig-text-muted)", fontWeight: 600, alignSelf: "center" }}>
+              추천 질문
+            </span>
+            {exampleQs.map((q) => (
+              <button
+                key={q}
+                onClick={() => askBot(q)}
+                disabled={botLoading}
+                className="ig-chip"
+                style={{ cursor: "pointer", fontSize: 12 }}
+              >
+                {q}
+              </button>
+            ))}
+            <button
+              onClick={() => setExampleQs(pickQuestions(4))}
+              title="다른 질문 보기"
+              style={{ fontSize: 12, color: "var(--ig-text-muted)", padding: "0 4px" }}
+            >
+              🔄
+            </button>
+          </div>
+          <div style={{ padding: 12, borderTop: "none" }}>
             <div
               style={{
                 display: "flex",
@@ -509,7 +771,7 @@ export default function SearchPage({
                 }}
               />
               <button
-                onClick={askBot}
+                onClick={() => askBot()}
                 disabled={!botInput.trim() || botLoading}
                 style={{
                   background: botInput.trim() ? "var(--ig-accent)" : "#e0e0e0",

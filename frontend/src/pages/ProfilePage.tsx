@@ -22,12 +22,14 @@ export default function ProfilePage({
   currentUserId,
   currentAvatar,
   onOpenProfile,
+  onOpenChat,
 }: {
   targetUsername: string;
   currentUsername: string;
   currentUserId: string;
   currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
+  onOpenChat?: (username: string) => void;
 }) {
   const [profile, setProfile] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -205,16 +207,25 @@ export default function ProfilePage({
                 </button>
               )
             ) : (
-              <button
-                className={isFollowing ? "ig-btn-secondary" : "ig-btn-primary"}
-                onClick={toggleFollow}
-              >
-                {isFollowing ? "팔로잉" : "팔로우"}
-              </button>
+              <>
+                <button
+                  className={isFollowing ? "ig-btn-secondary" : "ig-btn-primary"}
+                  onClick={toggleFollow}
+                >
+                  {isFollowing ? "팔로잉" : "팔로우"}
+                </button>
+                <button
+                  className="ig-btn-secondary"
+                  onClick={() => onOpenChat?.(targetUsername)}
+                  title={`${targetUsername}님에게 메시지 보내기`}
+                >
+                  메시지 보내기
+                </button>
+              </>
             )}
           </div>
-          <div style={{ display: "flex", gap: 32, marginBottom: 18, fontSize: 16 }}>
-            <span>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18, fontSize: 16 }}>
+            <span className="ig-stat-btn" style={{ cursor: "default" }}>
               게시물 <b>{profile.post_count}</b>
             </span>
             <button
