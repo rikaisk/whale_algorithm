@@ -440,8 +440,11 @@ export default function ChatPage({
                       {m.image_url && (
                         <img
                           src={m.image_url}
-                          alt="AI 생성 이미지"
+                          alt="첨부 이미지"
                           loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
                           style={{
                             maxWidth: "70%",
                             maxHeight: 280,

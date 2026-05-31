@@ -43,6 +43,7 @@ export default function ProfilePage({
   const [loading, setLoading] = useState(true);
   const [showList, setShowList] = useState<"followers" | "following" | null>(null);
   const [listItems, setListItems] = useState<UserMini[]>([]);
+  const [failedImgs, setFailedImgs] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const isSelf = currentUsername === targetUsername;
@@ -319,25 +320,31 @@ export default function ProfilePage({
             gap: 3,
           }}
         >
-          {posts.map((p) => (
+          {posts.map((p) => {
+            const hasImg = !!p.image_base64 && !failedImgs.has(p.id);
+            return (
             <button
               key={p.id}
               onClick={() => setOpenedPost(p)}
               style={{
                 aspectRatio: "1 / 1",
-                background: p.image_base64 ? "#000" : "linear-gradient(135deg, #fafafa, #efefef)",
+                background: hasImg ? "#000" : "linear-gradient(135deg, #fafafa, #efefef)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 overflow: "hidden",
-                padding: p.image_base64 ? 0 : 14,
+                padding: hasImg ? 0 : 14,
                 position: "relative",
               }}
             >
-              {p.image_base64 ? (
+              {hasImg ? (
                 <img
-                  src={p.image_base64}
+                  src={p.image_base64!}
                   alt=""
+                  loading="lazy"
+                  onError={() =>
+                    setFailedImgs((prev) => new Set(prev).add(p.id))
+                  }
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
               ) : (
@@ -357,7 +364,8 @@ export default function ProfilePage({
                 </div>
               )}
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 

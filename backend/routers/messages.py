@@ -99,7 +99,7 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
     if receiver is None or not getattr(receiver, "is_ai", False):
         return
 
-    from routers.admin import get_persona_personality, get_persona_photo_prompt
+    from routers.admin import get_persona_personality
     personality = get_persona_personality(receiver.username)
 
     reply_text = await solar.persona_reply(
@@ -108,11 +108,11 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
     if not reply_text:
         return
 
-    # Decide if image attached
+    # Decide if image attached (주제에 맞는 안정적 이미지 — loremflickr)
     image_url = None
-    photo_prompt = get_persona_photo_prompt(receiver.username)
-    if photo_prompt and _wants_image(incoming_content):
-        image_url = _build_pollinations_url(photo_prompt)
+    if _wants_image(incoming_content):
+        from routers.admin import _persona_image_url
+        image_url = _persona_image_url(receiver.username, str(uuid.uuid4()))
 
     reply = Message(
         id=str(uuid.uuid4()),

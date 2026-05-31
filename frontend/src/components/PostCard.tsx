@@ -155,6 +155,7 @@ export default function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
+  const [imgError, setImgError] = useState(false);
   const authorName = post.author_username ?? post.author_id.slice(0, 8);
   const isMine = post.author_id === currentUserId;
 
@@ -250,11 +251,13 @@ export default function PostCard({
         )}
       </header>
 
-      {post.image_base64 && (
+      {post.image_base64 && !imgError && (
         <div style={{ background: "#000", display: "flex", justifyContent: "center" }}>
           <img
             src={post.image_base64}
             alt="post"
+            loading="lazy"
+            onError={() => setImgError(true)}
             style={{ width: "100%", maxHeight: 600, objectFit: "contain" }}
           />
         </div>

@@ -30,19 +30,43 @@ def _svg_image(emoji: str, color1: str, color2: str) -> str:
     return "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
 
 
-def _pollinations_url(prompt: str, seed_key: str) -> str:
-    """생성형 AI(Pollinations) 이미지 URL. seed_key로 매 실행마다 동일한 이미지 유지."""
-    encoded = urllib.parse.quote(prompt)
-    seed = int(hashlib.md5(seed_key.encode("utf-8")).hexdigest(), 16) % 1_000_000
-    return (
-        f"https://image.pollinations.ai/prompt/{encoded}"
-        f"?width=512&height=512&seed={seed}&nologo=true"
-    )
+# 페르소나별 이미지 검색 키워드 (loremflickr 태그). 주제에 맞는 안정적인 사진 제공.
+# Pollinations 익명 API가 IP당 동시 1건으로 제한되어 피드에서 대부분 깨지므로 교체함.
+IMAGE_KEYWORDS = {
+    "yuna": "cafe,dessert",
+    "minho": "running,marathon",
+    "jisoo": "cinema,movie",
+    "taeyang": "camping,tent",
+    "haeun": "embroidery,cat",
+    "yura": "vintage,fashion",
+    "dohyun": "gaming,computer",
+    "seoyeon": "yoga,meditation",
+    "taejun": "guitar,band",
+    "jiwon": "puppy,dog",
+    "jaeyun": "books,reading",
+    "soohyun": "camera,photography",
+    "minjae": "coding,computer",
+    "hayoon": "finance,money",
+    "doyeon": "plant,gardening",
+    "junseo": "car,road",
+    "areum": "climbing,bouldering",
+    "nara": "calligraphy,stationery",
+    "gunwoo": "bicycle,cycling",
+    "subin": "concert,stage",
+}
 
 
-def _is_generated_image(image: str | None) -> bool:
-    """이미 Pollinations 생성형 이미지가 붙어있는지."""
-    return bool(image) and "image.pollinations.ai" in image
+def _persona_image_url(username: str, seed_key: str) -> str:
+    """페르소나 주제에 맞는 안정적인 이미지 URL (loremflickr). lock으로 고정."""
+    keywords = IMAGE_KEYWORDS.get(username, "lifestyle")
+    lock = int(hashlib.md5(seed_key.encode("utf-8")).hexdigest(), 16) % 1_000_000
+    tag = urllib.parse.quote(keywords)
+    return f"https://loremflickr.com/512/512/{tag}?lock={lock}"
+
+
+def _needs_new_image(image: str | None) -> bool:
+    """안정적 이미지(loremflickr)가 아니면 (없음/옛 SVG/Pollinations) 교체 대상."""
+    return not (image and "loremflickr.com" in image)
 
 
 PERSONAS = [
@@ -447,15 +471,14 @@ def seed_ai_users_fallback_only() -> list[str]:
     for user in created_users:
         persona = persona_by_name.get(user.username, {})
         contents = FALLBACK_POSTS_BY_USERNAME.get(user.username, [])
-        photo_prompt = persona.get("photo_prompt") or persona.get("bio", "")
         tags = persona.get("tags", [])
 
         count = min(len(contents), random.randint(3, 5))
         chosen = random.sample(contents, k=count) if contents else []
         for i, content in enumerate(chosen):
             pid = str(uuid.uuid4())
-            # 모든 AI 게시물에 생성형 AI 이미지 첨부
-            image = _pollinations_url(photo_prompt, pid)
+            # 모든 AI 게시물에 주제에 맞는 안정적 이미지 첨부
+            image = _persona_image_url(user.username, pid)
             post = Post(
                 id=pid,
                 author_id=user.id,
@@ -493,21 +516,18 @@ def seed_ai_users_fallback_only() -> list[str]:
 
 
 def backfill_ai_post_images() -> int:
-    """기존 AI 유저 게시물 중 생성형 이미지가 없는(또는 옛 SVG) 글에 Pollinations 이미지 부여."""
-    persona_by_name = {p["username"]: p for p in PERSONAS}
+    """AI 게시물의 이미지가 안정적 소스(loremflickr)가 아니면(없음/옛 SVG/Pollinations) 교체."""
     updated = 0
     for user in user_store.values():
         if not getattr(user, "is_ai", False):
             continue
-        persona = persona_by_name.get(user.username, {})
-        photo_prompt = persona.get("photo_prompt") or persona.get("bio", "") or user.bio
         for post_id in user.post_ids:
             if not post_store.exists(post_id):
                 continue
             post = post_store.get(post_id)
-            if _is_generated_image(post.image_base64):
+            if not _needs_new_image(post.image_base64):
                 continue
-            post.image_base64 = _pollinations_url(photo_prompt, post.id)
+            post.image_base64 = _persona_image_url(user.username, post.id)
             post_store.set(post.id, post)
             updated += 1
     return updated
