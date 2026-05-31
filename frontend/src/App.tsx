@@ -144,7 +144,7 @@ export default function App() {
               backgroundClip: "text",
             }}
           >
-            AlgoSNS
+            WhaleGram
           </h1>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <input
@@ -262,7 +262,7 @@ export default function App() {
               userSelect: "none",
             }}
           >
-            AlgoSNS
+            WhaleGram
           </h1>
           <nav style={{ display: "flex", gap: 4 }}>
             {NAV.map((n) => {

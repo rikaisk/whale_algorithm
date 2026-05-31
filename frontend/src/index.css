@@ -97,6 +97,27 @@ a {
   background: #fafafa;
 }
 
+.ig-stat-btn {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  color: inherit;
+  border-radius: 8px;
+  transition: background 0.15s ease, transform 0.1s ease;
+  font-family: inherit;
+}
+
+.ig-stat-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ig-stat-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.96);
+}
+
 .ig-input {
   width: 100%;
   background: #fafafa;

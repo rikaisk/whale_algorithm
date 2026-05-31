@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     persistence.save_all()
 
 
-app = FastAPI(title="AlgoSNS", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="WhaleGram", version="0.3.0", lifespan=lifespan)
 
 _default_origins = "http://localhost:5173,http://localhost:5174,http://localhost:5175"
 _origins_raw = os.getenv("ALLOWED_ORIGINS", _default_origins)
@@ -57,7 +57,7 @@ async def persist_on_write(request: Request, call_next):
     return response
 
 
-from routers import profile, posts, search, recommend, comments, auth, messages, admin
+from routers import profile, posts, search, recommend, comments, auth, messages, admin, chatbot
 
 app.include_router(auth.router)
 app.include_router(profile.router)
@@ -67,8 +67,9 @@ app.include_router(recommend.router)
 app.include_router(comments.router)
 app.include_router(messages.router)
 app.include_router(admin.router)
+app.include_router(chatbot.router)
 
 
 @app.get("/")
 def root():
-    return {"message": "AlgoSNS API is running"}
+    return {"message": "WhaleGram API is running"}

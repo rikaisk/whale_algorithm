@@ -54,7 +54,7 @@ function CommentNode({
   };
 
   return (
-    <div style={{ display: "flex", gap: 10, padding: "8px 0", marginLeft: comment.parent_id ? 24 : 0 }}>
+    <div style={{ display: "flex", gap: 10, padding: "8px 0", marginLeft: comment.parent_id ? 12 : 0 }}>
       <Avatar
         username={authorName}
         size={28}
@@ -187,7 +187,8 @@ export default function PostCard({
   const actionBtnStyle: React.CSSProperties = {
     border: "1.5px solid #000",
     borderRadius: 8,
-    padding: "6px 12px",
+    width: 44,
+    height: 36,
     fontSize: 20,
     background: "#fff",
     display: "inline-flex",
@@ -195,6 +196,8 @@ export default function PostCard({
     justifyContent: "center",
     transition: "transform 0.15s",
     cursor: "pointer",
+    padding: 0,
+    lineHeight: 1,
   };
 
   return (
@@ -248,8 +251,6 @@ export default function PostCard({
             style={{
               ...actionBtnStyle,
               color: heartColor,
-              fontSize: 22,
-              lineHeight: 1,
             }}
             title="좋아요"
           >
@@ -259,14 +260,18 @@ export default function PostCard({
             onClick={loadComments}
             onMouseEnter={() => setCommentHover(true)}
             onMouseLeave={() => setCommentHover(false)}
-            style={{
-              ...actionBtnStyle,
-              fontSize: 18,
-              filter: commentHover ? "brightness(0)" : "none",
-            }}
+            style={actionBtnStyle}
             title="댓글"
           >
-            💬
+            <span
+              style={{
+                display: "inline-block",
+                filter: commentHover ? "brightness(0)" : "none",
+                transition: "filter 0.15s",
+              }}
+            >
+              💬
+            </span>
           </button>
         </div>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
@@ -341,14 +346,23 @@ export default function PostCard({
         <button
           onClick={submitComment}
           disabled={!commentText.trim()}
+          title="댓글 게시"
           style={{
-            color: commentText.trim() ? "var(--ig-accent)" : "rgba(0,149,246,0.4)",
-            fontWeight: 600,
-            fontSize: 14,
+            background: commentText.trim() ? "var(--ig-accent)" : "#e0e0e0",
+            color: "#fff",
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 16,
+            fontWeight: 700,
             cursor: commentText.trim() ? "pointer" : "default",
+            transition: "background 0.15s",
           }}
         >
-          게시
+          ↑
         </button>
       </div>
     </article>

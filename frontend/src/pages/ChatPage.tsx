@@ -158,7 +158,9 @@ export default function ChatPage({
       style={{
         display: "grid",
         gridTemplateColumns: "320px 1fr",
-        height: 580,
+        height: "calc(100vh - 140px)",
+        minHeight: 500,
+        maxHeight: 800,
         overflow: "hidden",
         maxWidth: 900,
         margin: "0 auto",

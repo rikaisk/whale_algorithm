@@ -75,7 +75,12 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
     if receiver is None or not getattr(receiver, "is_ai", False):
         return
 
-    reply_text = await solar.persona_reply(receiver.username, receiver.bio, incoming_content)
+    from routers.admin import get_persona_personality
+    personality = get_persona_personality(receiver.username)
+
+    reply_text = await solar.persona_reply(
+        receiver.username, receiver.bio, incoming_content, personality_traits=personality
+    )
     if not reply_text:
         return
 

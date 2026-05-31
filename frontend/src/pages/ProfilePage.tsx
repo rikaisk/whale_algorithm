@@ -223,7 +223,7 @@ export default function ProfilePage({
                 setListItems(list);
                 setShowList("followers");
               }}
-              style={{ background: "none", border: "none", padding: 0, fontSize: 16, cursor: "pointer", color: "inherit" }}
+              className="ig-stat-btn"
             >
               팔로워 <b>{profile.followers_count}</b>
             </button>
@@ -233,7 +233,7 @@ export default function ProfilePage({
                 setListItems(list);
                 setShowList("following");
               }}
-              style={{ background: "none", border: "none", padding: 0, fontSize: 16, cursor: "pointer", color: "inherit" }}
+              className="ig-stat-btn"
             >
               팔로잉 <b>{profile.following_count}</b>
             </button>
@@ -290,7 +290,7 @@ export default function ProfilePage({
             onClick={() => setOpenedPost(null)}
             style={{ color: "var(--ig-text-muted)", fontSize: 13, marginBottom: 10 }}
           >
-            ← 그리드로 돌아가기
+            ← 돌아가기
           </button>
           <PostCard
             post={openedPost}

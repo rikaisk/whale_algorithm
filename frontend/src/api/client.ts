@@ -119,6 +119,9 @@ export const userExists = async (username: string): Promise<boolean> => {
   }
 };
 
+export const askChatbot = (question: string): Promise<{ answer: string }> =>
+  api.post("/chatbot/ask", { question }).then((r) => r.data);
+
 // Profile
 export const registerUser = (username: string, password: string, bio: string) =>
   api.post("/users/register", { username, password, bio }).then((r) => r.data);
