@@ -22,6 +22,21 @@ class CreatePostRequest(BaseModel):
     image_base64: Optional[str] = None
 
 
+def _serialize_post(post: Post, id_to_name: dict[str, str], current_user_id: str | None = None) -> dict:
+    return {
+        "id": post.id,
+        "author_id": post.author_id,
+        "author_username": id_to_name.get(post.author_id, "unknown"),
+        "content": post.content,
+        "hashtags": post.hashtags,
+        "likes": post.likes,
+        "comment_count": len(post.comment_ids),
+        "image_base64": post.image_base64,
+        "liked_by_me": bool(current_user_id and current_user_id in post.liked_by),
+        "created_at": post.created_at,
+    }
+
+
 @router.post("/posts", status_code=201)
 async def create_post(
     req: CreatePostRequest,
@@ -55,6 +70,7 @@ async def create_post(
         likes=0,
         comment_ids=[],
         image_base64=req.image_base64,
+        liked_by=[],
         created_at=time.time(),
     )
     post_store.set(post.id, post)
@@ -118,18 +134,28 @@ def like_post(
         raise HTTPException(status_code=404, detail="Post not found")
 
     post = post_store.get(post_id)
-    post.likes += 1
+    if user_id in post.liked_by:
+        post.liked_by.remove(user_id)
+        post.likes = max(0, post.likes - 1)
+        liked = False
+    else:
+        post.liked_by.append(user_id)
+        post.likes += 1
+        liked = True
     post_store.set(post_id, post)
-    return {"post_id": post_id, "likes": post.likes}
+    return {"post_id": post_id, "likes": post.likes, "liked_by_me": liked}
 
 
 @router.get("/feed/{username}")
-def get_feed(username: str):
+def get_feed(
+    username: str,
+    current_user_id: str | None = Depends(auth.get_current_user_optional),
+):
     if not user_store.exists(username):
         raise HTTPException(status_code=404, detail="User not found")
 
     user = user_store.get(username)
-    following_ids = set(user.following)
+    relevant_author_ids = set(user.following) | {user.id}
     all_posts = feed_tree.inorder()
     id_to_name = {u.id: u.username for u in user_store.values()}
 
@@ -138,16 +164,6 @@ def get_feed(username: str):
         if not post_store.exists(post_id):
             continue
         post = post_store.get(post_id)
-        if post.author_id in following_ids:
-            feed.append({
-                "id": post.id,
-                "author_id": post.author_id,
-                "author_username": id_to_name.get(post.author_id, "unknown"),
-                "content": post.content,
-                "hashtags": post.hashtags,
-                "likes": post.likes,
-                "comment_count": len(post.comment_ids),
-                "image_base64": post.image_base64,
-                "created_at": post.created_at,
-            })
+        if post.author_id in relevant_author_ids:
+            feed.append(_serialize_post(post, id_to_name, current_user_id))
     return feed

@@ -14,7 +14,10 @@ def _build_interest_map() -> dict[str, list[str]]:
 
 
 @router.get("/recommend/posts/{username}")
-async def recommend_posts(username: str):
+async def recommend_posts(
+    username: str,
+    current_user_id: str | None = Depends(auth.get_current_user_optional),
+):
     if not user_store.exists(username):
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -63,6 +66,7 @@ async def recommend_posts(username: str):
             "likes": post.likes,
             "comment_count": len(post.comment_ids),
             "image_base64": post.image_base64,
+            "liked_by_me": bool(current_user_id and current_user_id in post.liked_by),
             "score": round(score, 3),
             "created_at": post.created_at,
         })

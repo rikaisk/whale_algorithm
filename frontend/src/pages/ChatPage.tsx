@@ -4,6 +4,7 @@ import {
   getConversation,
   openMessageSocket,
   getToken,
+  userExists,
   type ConversationSummary,
   type DmMessage,
 } from "../api/client";
@@ -96,10 +97,17 @@ export default function ChatPage({ username, userId }: { username: string; userI
     setDraft("");
   };
 
-  const startConversation = () => {
+  const startConversation = async () => {
     const target = peerInput.trim();
-    if (!target || target === username) {
+    if (!target) return;
+    if (target === username) {
       setError("본인이 아닌 다른 유저명을 입력하세요.");
+      return;
+    }
+    const exists = await userExists(target);
+    if (!exists) {
+      setError("존재하지 않는 사용자입니다");
+      setPeer("");
       return;
     }
     setPeer(target);
@@ -122,21 +130,31 @@ export default function ChatPage({ username, userId }: { username: string; userI
         <header style={{ padding: 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>{username}</h3>
         </header>
-        <div style={{ padding: 12, display: "flex", gap: 6 }}>
-          <input
-            className="ig-input"
-            value={peerInput}
-            onChange={(e) => setPeerInput(e.target.value)}
-            placeholder="유저명 입력"
-            onKeyDown={(e) => e.key === "Enter" && startConversation()}
-          />
-          <button
-            className="ig-btn-primary"
-            onClick={startConversation}
-            style={{ padding: "8px 12px", fontSize: 13 }}
-          >
-            대화
-          </button>
+        <div style={{ padding: 12 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              className="ig-input"
+              value={peerInput}
+              onChange={(e) => {
+                setPeerInput(e.target.value);
+                if (error) setError("");
+              }}
+              placeholder="유저명 입력"
+              onKeyDown={(e) => e.key === "Enter" && startConversation()}
+            />
+            <button
+              className="ig-btn-primary"
+              onClick={startConversation}
+              style={{ padding: "8px 12px", fontSize: 13 }}
+            >
+              대화
+            </button>
+          </div>
+          {error && (
+            <p style={{ color: "var(--ig-danger)", fontSize: 12, margin: "6px 2px 0" }}>
+              {error}
+            </p>
+          )}
         </div>
         <div className="ig-scrollbar" style={{ flex: 1, overflowY: "auto" }}>
           {conversations.length === 0 ? (
@@ -316,9 +334,6 @@ export default function ChatPage({ username, userId }: { username: string; userI
               </div>
             </div>
           </>
-        )}
-        {error && (
-          <p style={{ color: "var(--ig-danger)", fontSize: 12, padding: "0 16px 8px", margin: 0 }}>{error}</p>
         )}
       </section>
     </div>

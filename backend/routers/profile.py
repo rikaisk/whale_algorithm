@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import Optional
+import base64
 import uuid
 import time
 
@@ -10,6 +12,8 @@ import core.solar as solar
 
 router = APIRouter(prefix="/users", tags=["profile"])
 
+MAX_AVATAR_BYTES = 1_000_000
+
 
 class RegisterRequest(BaseModel):
     username: str
@@ -19,6 +23,10 @@ class RegisterRequest(BaseModel):
 
 class BioUpdateRequest(BaseModel):
     bio: str
+
+
+class AvatarUpdateRequest(BaseModel):
+    avatar_base64: Optional[str] = None
 
 
 def _get_user(username: str):
@@ -62,6 +70,8 @@ def get_profile(username: str):
         "username": user.username,
         "bio": user.bio,
         "interests": user.interests,
+        "avatar_base64": user.avatar_base64,
+        "is_ai": user.is_ai,
         "following_count": len(user.following),
         "followers_count": len(user.followers),
         "post_count": len(user.post_ids),
@@ -70,7 +80,10 @@ def get_profile(username: str):
 
 
 @router.get("/{username}/posts")
-def get_user_posts(username: str):
+def get_user_posts(
+    username: str,
+    current_user_id: str | None = Depends(auth.get_current_user_optional),
+):
     user = _get_user(username)
     posts = []
     for post_id in reversed(user.post_ids):
@@ -86,6 +99,7 @@ def get_user_posts(username: str):
             "likes": post.likes,
             "comment_count": len(post.comment_ids),
             "image_base64": post.image_base64,
+            "liked_by_me": bool(current_user_id and current_user_id in post.liked_by),
             "created_at": post.created_at,
         })
     return posts
@@ -104,3 +118,26 @@ async def update_bio(
     user.interests = await solar.extract_interests(req.bio)
     user_store.set(username, user)
     return {"username": username, "bio": user.bio, "interests": user.interests}
+
+
+@router.patch("/{username}/avatar")
+def update_avatar(
+    username: str,
+    req: AvatarUpdateRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
+    user = _get_user(username)
+    if user.id != user_id:
+        raise HTTPException(status_code=403, detail="Cannot modify another user's avatar")
+
+    if req.avatar_base64:
+        try:
+            raw = base64.b64decode(req.avatar_base64.split(",", 1)[-1], validate=True)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid base64 image")
+        if len(raw) > MAX_AVATAR_BYTES:
+            raise HTTPException(status_code=413, detail="Avatar exceeds 1MB limit")
+
+    user.avatar_base64 = req.avatar_base64
+    user_store.set(username, user)
+    return {"username": username, "avatar_base64": user.avatar_base64}

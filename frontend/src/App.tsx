@@ -27,6 +27,7 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
 export default function App() {
   const [username, setUsername] = useState("");
   const [userId, setUserId] = useState("");
+  const [myAvatar, setMyAvatar] = useState<string | null>(null);
   const [loggedIn, setLoggedIn] = useState(false);
   const [input, setInput] = useState("");
   const [password, setPassword] = useState("");
@@ -44,11 +45,17 @@ export default function App() {
       .then((me) => {
         setUsername(me.username);
         setUserId(me.id);
+        setMyAvatar(me.avatar_base64 ?? null);
         setProfileTarget(me.username);
         setLoggedIn(true);
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+    getMe().then((me) => setMyAvatar(me.avatar_base64 ?? null)).catch(() => {});
+  }, [tab, loggedIn]);
 
   const login = async () => {
     setError("");
@@ -271,7 +278,7 @@ export default function App() {
             })}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Avatar username={username} size={28} onClick={() => { setProfileTarget(username); setTab("profile"); }} />
+            <Avatar username={username} size={28} src={myAvatar} onClick={() => { setProfileTarget(username); setTab("profile"); }} />
             <button
               onClick={logout}
               style={{ color: "var(--ig-text-muted)", fontSize: 13, fontWeight: 600 }}

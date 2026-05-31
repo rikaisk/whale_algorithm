@@ -26,6 +26,8 @@ export interface User {
   username: string;
   bio: string;
   interests: string[];
+  avatar_base64?: string | null;
+  is_ai?: boolean;
   following_count: number;
   followers_count: number;
   post_count: number;
@@ -41,6 +43,7 @@ export interface Post {
   likes: number;
   comment_count: number;
   image_base64?: string | null;
+  liked_by_me?: boolean;
   score?: number;
   created_at: number;
 }
@@ -84,11 +87,24 @@ export const getMe = (): Promise<{
   username: string;
   bio: string;
   interests: string[];
+  avatar_base64?: string | null;
   following: string[];
 }> => api.get("/me").then((r) => r.data);
 
 export const getUserPosts = (username: string): Promise<Post[]> =>
   api.get(`/users/${username}/posts`).then((r) => r.data);
+
+export const updateAvatar = (username: string, avatar_base64: string | null) =>
+  api.patch(`/users/${username}/avatar`, { avatar_base64 }).then((r) => r.data);
+
+export const userExists = async (username: string): Promise<boolean> => {
+  try {
+    await api.get(`/users/${username}`);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 // Profile
 export const registerUser = (username: string, password: string, bio: string) =>
@@ -107,7 +123,9 @@ export const createPost = (content: string, image_base64?: string) =>
 export const deletePost = (post_id: string) =>
   api.delete(`/posts/${post_id}`);
 
-export const likePost = (post_id: string) =>
+export const likePost = (
+  post_id: string,
+): Promise<{ post_id: string; likes: number; liked_by_me: boolean }> =>
   api.post(`/posts/${post_id}/like`).then((r) => r.data);
 
 export const getFeed = (username: string): Promise<Post[]> =>

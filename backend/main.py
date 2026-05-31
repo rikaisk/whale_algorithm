@@ -49,7 +49,7 @@ async def persist_on_write(request: Request, call_next):
     return response
 
 
-from routers import profile, posts, search, recommend, comments, auth, messages
+from routers import profile, posts, search, recommend, comments, auth, messages, admin
 
 app.include_router(auth.router)
 app.include_router(profile.router)
@@ -58,6 +58,7 @@ app.include_router(search.router)
 app.include_router(recommend.router)
 app.include_router(comments.router)
 app.include_router(messages.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

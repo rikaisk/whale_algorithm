@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from dataclasses import asdict
+import asyncio
 import uuid
 import time
 import json
@@ -8,6 +9,7 @@ import json
 from core.store import user_store, message_store
 from core.models import Message
 from core import auth, persistence
+import core.solar as solar
 
 router = APIRouter(tags=["messages"])
 
@@ -56,8 +58,51 @@ def _id_to_username(user_id: str) -> str | None:
     return None
 
 
+def _get_user_by_id(user_id: str):
+    for u in user_store.values():
+        if u.id == user_id:
+            return u
+    return None
+
+
 def _persist_message(msg: Message) -> None:
     message_store.set(msg.id, msg)
+
+
+async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: str) -> None:
+    """If receiver is AI, generate a Solar reply from receiver → sender."""
+    receiver = _get_user_by_id(receiver_id)
+    if receiver is None or not getattr(receiver, "is_ai", False):
+        return
+
+    reply_text = await solar.persona_reply(receiver.username, receiver.bio, incoming_content)
+    if not reply_text:
+        return
+
+    reply = Message(
+        id=str(uuid.uuid4()),
+        sender_id=receiver_id,
+        receiver_id=sender_id,
+        content=reply_text,
+        created_at=time.time(),
+        read=False,
+    )
+    _persist_message(reply)
+    try:
+        persistence.save_all()
+    except Exception:
+        pass
+
+    payload = {
+        "type": "message",
+        "id": reply.id,
+        "sender_id": receiver_id,
+        "sender_username": receiver.username,
+        "receiver_id": sender_id,
+        "content": reply.content,
+        "created_at": reply.created_at,
+    }
+    await manager.send_to(sender_id, payload)
 
 
 @router.post("/messages", status_code=201)
@@ -94,6 +139,8 @@ async def send_message(
         "created_at": msg.created_at,
     }
     await manager.send_to(receiver_id, payload)
+
+    asyncio.create_task(_maybe_ai_reply(sender_id, receiver_id, req.content))
 
     return {"id": msg.id, "created_at": msg.created_at}
 
@@ -188,6 +235,8 @@ async def ws_endpoint(websocket: WebSocket):
             }
             await manager.send_to(receiver_id, payload)
             await websocket.send_json({**payload, "type": "echo"})
+
+            asyncio.create_task(_maybe_ai_reply(user_id, receiver_id, content))
     except WebSocketDisconnect:
         pass
     finally:

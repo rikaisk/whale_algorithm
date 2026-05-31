@@ -40,6 +40,7 @@ def get_me(user_id: str = Depends(auth.get_current_user)):
                 "username": user.username,
                 "bio": user.bio,
                 "interests": user.interests,
+                "avatar_base64": user.avatar_base64,
                 "following": list(user.following),
             }
     raise HTTPException(status_code=401, detail="User not found")

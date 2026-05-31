@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { User, Post } from "../api/client";
 import {
   getProfile,
@@ -7,9 +7,12 @@ import {
   followUser,
   unfollowUser,
   getMe,
+  updateAvatar,
 } from "../api/client";
 import Avatar from "../components/Avatar";
 import PostCard from "../components/PostCard";
+
+const MAX_AVATAR_BYTES = 1_000_000;
 
 export default function ProfilePage({
   targetUsername,
@@ -26,10 +29,13 @@ export default function ProfilePage({
   const [posts, setPosts] = useState<Post[]>([]);
   const [editBio, setEditBio] = useState(false);
   const [bio, setBio] = useState("");
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   const isSelf = currentUsername === targetUsername;
 
@@ -44,6 +50,7 @@ export default function ProfilePage({
       ]);
       setProfile(p);
       setBio(p.bio);
+      setAvatarDraft(p.avatar_base64 ?? null);
       setPosts(userPosts);
       if (my) {
         setIsFollowing(my.following.includes(p.id));
@@ -60,15 +67,46 @@ export default function ProfilePage({
     setOpenedPost(null);
   }, [targetUsername]);
 
-  const saveBio = async () => {
-    if (!bio.trim()) return;
+  const onAvatarFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_AVATAR_BYTES) {
+      setError("프로필 사진은 1MB 이하만 가능합니다.");
+      e.target.value = "";
+      return;
+    }
+    setError("");
+    const reader = new FileReader();
+    reader.onload = () => setAvatarDraft(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const removeAvatar = () => setAvatarDraft(null);
+
+  const saveProfile = async () => {
+    if (!profile) return;
+    setSavingAvatar(true);
     try {
-      await updateBio(targetUsername, bio);
+      if (bio.trim() && bio !== profile.bio) {
+        await updateBio(targetUsername, bio);
+      }
+      if (avatarDraft !== (profile.avatar_base64 ?? null)) {
+        await updateAvatar(targetUsername, avatarDraft);
+      }
       setEditBio(false);
       await load();
     } catch {
-      setError("소개글 수정에 실패했습니다.");
+      setError("프로필 저장에 실패했습니다.");
+    } finally {
+      setSavingAvatar(false);
     }
+  };
+
+  const cancelEdit = () => {
+    if (!profile) return;
+    setEditBio(false);
+    setBio(profile.bio);
+    setAvatarDraft(profile.avatar_base64 ?? null);
   };
 
   const toggleFollow = async () => {
@@ -89,20 +127,77 @@ export default function ProfilePage({
   };
 
   if (loading) return <div style={{ textAlign: "center", padding: 60, color: "var(--ig-text-muted)" }}>불러오는 중...</div>;
-  if (error) return <p style={{ color: "var(--ig-danger)", textAlign: "center" }}>{error}</p>;
+  if (error && !profile) return <p style={{ color: "var(--ig-danger)", textAlign: "center" }}>{error}</p>;
   if (!profile) return null;
 
   return (
     <div style={{ maxWidth: 740, margin: "0 auto" }}>
       <section style={{ display: "flex", gap: 36, padding: "20px 16px 32px", alignItems: "flex-start" }}>
-        <Avatar username={profile.username} size={150} ring />
+        <div style={{ position: "relative" }}>
+          <Avatar
+            username={profile.username}
+            size={150}
+            ring
+            src={editBio ? avatarDraft : profile.avatar_base64 ?? null}
+          />
+          {editBio && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10, alignItems: "center" }}>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={onAvatarFile}
+                style={{ display: "none" }}
+              />
+              <button
+                className="ig-btn-secondary"
+                style={{ padding: "5px 12px", fontSize: 12 }}
+                onClick={() => fileRef.current?.click()}
+              >
+                사진 변경
+              </button>
+              {avatarDraft && (
+                <button
+                  onClick={removeAvatar}
+                  style={{ color: "var(--ig-danger)", fontSize: 12, fontWeight: 600 }}
+                >
+                  사진 제거
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
             <h2 style={{ margin: 0, fontWeight: 300, fontSize: 28 }}>{profile.username}</h2>
+            {profile.is_ai && (
+              <span
+                className="ig-chip"
+                style={{ background: "linear-gradient(135deg,#4f5bd5,#962fbf)", color: "#fff", fontSize: 11 }}
+              >
+                🤖 AI
+              </span>
+            )}
             {isSelf ? (
-              <button className="ig-btn-secondary" onClick={() => setEditBio(true)}>
-                프로필 편집
-              </button>
+              editBio ? (
+                <>
+                  <button
+                    className="ig-btn-primary"
+                    onClick={saveProfile}
+                    disabled={savingAvatar}
+                    style={{ padding: "6px 14px" }}
+                  >
+                    {savingAvatar ? "저장 중..." : "저장"}
+                  </button>
+                  <button className="ig-btn-secondary" onClick={cancelEdit}>
+                    취소
+                  </button>
+                </>
+              ) : (
+                <button className="ig-btn-secondary" onClick={() => setEditBio(true)}>
+                  프로필 편집
+                </button>
+              )
             ) : (
               <button
                 className={isFollowing ? "ig-btn-secondary" : "ig-btn-primary"}
@@ -124,30 +219,20 @@ export default function ProfilePage({
             </span>
           </div>
           {editBio ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <textarea
-                className="ig-input"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                rows={3}
-                style={{ resize: "vertical", minHeight: 60 }}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="ig-btn-primary" onClick={saveBio} style={{ padding: "6px 14px" }}>
-                  저장
-                </button>
-                <button className="ig-btn-secondary" onClick={() => { setEditBio(false); setBio(profile.bio); }}>
-                  취소
-                </button>
-              </div>
-            </div>
+            <textarea
+              className="ig-input"
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              rows={3}
+              style={{ resize: "vertical", minHeight: 60 }}
+            />
           ) : (
             <p style={{ margin: "0 0 8px", fontSize: 14, whiteSpace: "pre-wrap" }}>
               {profile.bio || <span style={{ color: "var(--ig-text-muted)" }}>(소개글 없음)</span>}
             </p>
           )}
           {profile.interests.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               {profile.interests.map((t) => (
                 <span key={t} className="ig-chip ig-chip-tag">
                   {t}
@@ -155,6 +240,7 @@ export default function ProfilePage({
               ))}
             </div>
           )}
+          {error && <p style={{ color: "var(--ig-danger)", fontSize: 13, marginTop: 8 }}>{error}</p>}
         </div>
       </section>
 

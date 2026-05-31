@@ -4,6 +4,7 @@ interface Props {
   username: string;
   size?: number;
   ring?: boolean;
+  src?: string | null;
   onClick?: () => void;
 }
 
@@ -27,7 +28,7 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-export default function Avatar({ username, size = 36, ring = false, onClick }: Props) {
+export default function Avatar({ username, size = 36, ring = false, src, onClick }: Props) {
   const { gradient, letter } = useMemo(() => {
     const safe = (username || "?").trim();
     const idx = hashString(safe) % PALETTES.length;
@@ -47,7 +48,7 @@ export default function Avatar({ username, size = 36, ring = false, onClick }: P
         width: dim,
         height: dim,
         borderRadius: "50%",
-        background: gradient,
+        background: src ? "#fff" : gradient,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -56,9 +57,18 @@ export default function Avatar({ username, size = 36, ring = false, onClick }: P
         fontSize,
         userSelect: "none",
         flexShrink: 0,
+        overflow: "hidden",
       }}
     >
-      {letter}
+      {src ? (
+        <img
+          src={src}
+          alt={username}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        letter
+      )}
     </div>
   );
 

@@ -49,6 +49,13 @@ def get_current_user(authorization: str = Header(default="")) -> str:
     return user_id
 
 
+def get_current_user_optional(authorization: str = Header(default="")) -> str | None:
+    if not authorization.startswith("Bearer "):
+        return None
+    token = authorization[len("Bearer "):].strip()
+    return token_store.get(token)
+
+
 def get_current_username(user_id: str) -> str:
     for user in user_store.values():
         if user.id == user_id:

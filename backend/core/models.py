@@ -12,6 +12,8 @@ class User:
     following: list[str]
     followers: list[str]
     post_ids: list[str] = field(default_factory=list)
+    avatar_base64: Optional[str] = None
+    is_ai: bool = False
     created_at: float = 0.0
 
 
@@ -24,6 +26,7 @@ class Post:
     likes: int = 0
     comment_ids: list[str] = field(default_factory=list)
     image_base64: Optional[str] = None
+    liked_by: list[str] = field(default_factory=list)
     created_at: float = 0.0
 
 

@@ -114,7 +114,7 @@ export default function PostCard({
   onOpenProfile?: (username: string) => void;
 }) {
   const [likes, setLikes] = useState(post.likes);
-  const [liked, setLiked] = useState(false);
+  const [liked, setLiked] = useState(Boolean(post.liked_by_me));
   const [popping, setPopping] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -123,11 +123,11 @@ export default function PostCard({
   const isMine = post.author_id === currentUserId;
 
   const handleLike = async () => {
-    setLiked(true);
     setPopping(true);
     setTimeout(() => setPopping(false), 350);
     const res = await likePost(post.id);
     setLikes(res.likes);
+    setLiked(res.liked_by_me);
   };
 
   const loadComments = async () => {
