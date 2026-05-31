@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 import uuid
 import time
 
-from core.store import user_store, search_trie, social_graph, feed_tree, post_store
+from core.store import user_store, search_trie, social_graph, post_store
 from core.models import User
+from core import auth
 import core.solar as solar
 
 router = APIRouter(prefix="/users", tags=["profile"])
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/users", tags=["profile"])
 
 class RegisterRequest(BaseModel):
     username: str
+    password: str
     bio: str
 
 
@@ -29,6 +31,8 @@ def _get_user(username: str):
 async def register(req: RegisterRequest):
     if not req.username.strip():
         raise HTTPException(status_code=400, detail="Username cannot be empty")
+    if len(req.password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
     if user_store.exists(req.username):
         raise HTTPException(status_code=409, detail="Username already exists")
 
@@ -36,6 +40,7 @@ async def register(req: RegisterRequest):
     user = User(
         id=str(uuid.uuid4()),
         username=req.username,
+        password_hash=auth.hash_password(req.password),
         bio=req.bio,
         interests=interests,
         following=[],
@@ -64,34 +69,38 @@ def get_profile(username: str):
     }
 
 
-@router.patch("/{username}/bio")
-async def update_bio(username: str, req: BioUpdateRequest):
+@router.get("/{username}/posts")
+def get_user_posts(username: str):
     user = _get_user(username)
+    posts = []
+    for post_id in reversed(user.post_ids):
+        if not post_store.exists(post_id):
+            continue
+        post = post_store.get(post_id)
+        posts.append({
+            "id": post.id,
+            "author_id": post.author_id,
+            "author_username": user.username,
+            "content": post.content,
+            "hashtags": post.hashtags,
+            "likes": post.likes,
+            "comment_count": len(post.comment_ids),
+            "image_base64": post.image_base64,
+            "created_at": post.created_at,
+        })
+    return posts
+
+
+@router.patch("/{username}/bio")
+async def update_bio(
+    username: str,
+    req: BioUpdateRequest,
+    user_id: str = Depends(auth.get_current_user),
+):
+    user = _get_user(username)
+    if user.id != user_id:
+        raise HTTPException(status_code=403, detail="Cannot modify another user's bio")
     user.bio = req.bio
     user.interests = await solar.extract_interests(req.bio)
     user_store.set(username, user)
     return {"username": username, "bio": user.bio, "interests": user.interests}
-
-
-@router.get("/{username}/feed")
-def get_user_feed(username: str):
-    user = _get_user(username)
-    following_ids = set(user.following)
-    all_posts = feed_tree.inorder()
-
-    feed = []
-    for _, post_id in reversed(all_posts):
-        if not post_store.exists(post_id):
-            continue
-        post = post_store.get(post_id)
-        if post.author_id in following_ids:
-            feed.append({
-                "id": post.id,
-                "author_id": post.author_id,
-                "content": post.content,
-                "hashtags": post.hashtags,
-                "likes": post.likes,
-                "comment_count": len(post.comment_ids),
-                "created_at": post.created_at,
-            })
-    return feed

@@ -17,6 +17,9 @@ post_store = HashTable()
 # 댓글 저장: comment_id -> Comment
 comment_store = HashTable()
 
+# DM 저장: message_id -> Message
+message_store = HashTable()
+
 # 피드 타임라인: (timestamp, post_id) 를 key로 BST에 삽입
 feed_tree = BST()
 

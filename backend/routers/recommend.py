@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 import time
 
 from core.store import user_store, post_store, tag_index, social_graph
 from algorithms.heap import MaxHeap
+from core import auth
 import core.solar as solar
 
 router = APIRouter(tags=["recommend"])
@@ -47,6 +48,7 @@ async def recommend_posts(username: str):
 
     top = MaxHeap().top_k(items, 20)
 
+    id_to_name = {u.id: u.username for u in user_store.values()}
     results = []
     for score, post_id in top:
         if not post_store.exists(post_id):
@@ -55,9 +57,12 @@ async def recommend_posts(username: str):
         results.append({
             "id": post.id,
             "author_id": post.author_id,
+            "author_username": id_to_name.get(post.author_id, "unknown"),
             "content": post.content,
             "hashtags": post.hashtags,
             "likes": post.likes,
+            "comment_count": len(post.comment_ids),
+            "image_base64": post.image_base64,
             "score": round(score, 3),
             "created_at": post.created_at,
         })
@@ -65,13 +70,19 @@ async def recommend_posts(username: str):
 
 
 @router.post("/users/{username}/follow/{target}", status_code=201)
-def follow_user(username: str, target: str):
+def follow_user(
+    username: str,
+    target: str,
+    user_id: str = Depends(auth.get_current_user),
+):
     if not user_store.exists(username) or not user_store.exists(target):
         raise HTTPException(status_code=404, detail="User not found")
     if username == target:
         raise HTTPException(status_code=400, detail="Cannot follow yourself")
 
     user = user_store.get(username)
+    if user.id != user_id:
+        raise HTTPException(status_code=403, detail="Cannot act on behalf of another user")
     target_user = user_store.get(target)
 
     if target_user.id in user.following:
@@ -86,11 +97,17 @@ def follow_user(username: str, target: str):
 
 
 @router.delete("/users/{username}/follow/{target}", status_code=204)
-def unfollow_user(username: str, target: str):
+def unfollow_user(
+    username: str,
+    target: str,
+    user_id: str = Depends(auth.get_current_user),
+):
     if not user_store.exists(username) or not user_store.exists(target):
         raise HTTPException(status_code=404, detail="User not found")
 
     user = user_store.get(username)
+    if user.id != user_id:
+        raise HTTPException(status_code=403, detail="Cannot act on behalf of another user")
     target_user = user_store.get(target)
 
     if target_user.id not in user.following:

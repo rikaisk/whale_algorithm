@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Query
 
-from core.store import search_trie, post_store, tag_index
+from core.store import search_trie, post_store, tag_index, user_store
 from algorithms.kmp import kmp_search
 import core.solar as solar
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+def _id_to_username_map() -> dict[str, str]:
+    return {u.id: u.username for u in user_store.values()}
 
 
 @router.get("/users")
@@ -24,6 +28,7 @@ def search_posts(q: str = Query(..., min_length=1)):
         if post.id not in matched_ids and kmp_search(post.content, q):
             matched_ids.add(post.id)
 
+    id_to_name = _id_to_username_map()
     results = []
     for post_id in matched_ids:
         if not post_store.exists(post_id):
@@ -34,9 +39,12 @@ def search_posts(q: str = Query(..., min_length=1)):
         results.append({
             "id": post.id,
             "author_id": post.author_id,
+            "author_username": id_to_name.get(post.author_id, "unknown"),
             "content": post.content,
             "hashtags": post.hashtags,
             "likes": post.likes,
+            "comment_count": len(post.comment_ids),
+            "image_base64": post.image_base64,
             "score": score,
             "created_at": post.created_at,
         })
@@ -58,6 +66,7 @@ async def expand_search(q: str = Query(..., min_length=1)):
             if post.id not in matched_ids and kmp_search(post.content, kw):
                 matched_ids.add(post.id)
 
+    id_to_name = _id_to_username_map()
     results = []
     for post_id in matched_ids:
         if not post_store.exists(post_id):
@@ -65,9 +74,13 @@ async def expand_search(q: str = Query(..., min_length=1)):
         post = post_store.get(post_id)
         results.append({
             "id": post.id,
+            "author_id": post.author_id,
+            "author_username": id_to_name.get(post.author_id, "unknown"),
             "content": post.content,
             "hashtags": post.hashtags,
             "likes": post.likes,
+            "comment_count": len(post.comment_ids),
+            "image_base64": post.image_base64,
             "created_at": post.created_at,
         })
 

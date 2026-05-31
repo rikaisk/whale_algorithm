@@ -1,99 +1,204 @@
 import { useState } from "react";
-import { searchUsers, searchPosts, expandSearch, Post } from "../api/client";
+import type { Post } from "../api/client";
+import { searchUsers, searchPosts, expandSearch } from "../api/client";
 import PostCard from "../components/PostCard";
+import Avatar from "../components/Avatar";
 
-export default function SearchPage({ currentUserId }: { currentUserId: string }) {
+type Tab = "posts" | "users" | "expand";
+
+export default function SearchPage({
+  currentUserId,
+  onOpenProfile,
+}: {
+  currentUserId: string;
+  onOpenProfile?: (username: string) => void;
+}) {
   const [query, setQuery] = useState("");
   const [userResults, setUserResults] = useState<string[]>([]);
   const [postResults, setPostResults] = useState<Post[]>([]);
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<"users" | "posts" | "expand">("posts");
+  const [activeTab, setActiveTab] = useState<Tab>("posts");
   const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
 
-  const search = async () => {
+  const runSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setSearched(true);
+    setUserResults([]);
+    setPostResults([]);
+    setExpanded([]);
     try {
       if (activeTab === "users") {
         const res = await searchUsers(query);
         setUserResults(res.results);
-        setPostResults([]);
-        setExpanded([]);
       } else if (activeTab === "posts") {
         const res = await searchPosts(query);
         setPostResults(res.results);
-        setUserResults([]);
-        setExpanded([]);
       } else {
         const res = await expandSearch(query);
         setPostResults(res.results);
         setExpanded(res.expanded_keywords);
-        setUserResults([]);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const tabStyle = (tab: string): React.CSSProperties => ({
-    padding: "6px 16px",
-    cursor: "pointer",
-    border: "none",
-    borderBottom: activeTab === tab ? "2px solid #1a73e8" : "2px solid transparent",
-    background: "transparent",
-    fontWeight: activeTab === tab ? 700 : 400,
-    color: activeTab === tab ? "#1a73e8" : "#555",
-  });
+  const tabBtn = (id: Tab, label: string) => {
+    const active = activeTab === id;
+    return (
+      <button
+        onClick={() => {
+          setActiveTab(id);
+          setSearched(false);
+          setUserResults([]);
+          setPostResults([]);
+          setExpanded([]);
+        }}
+        style={{
+          padding: "10px 18px",
+          borderBottom: active ? "2px solid var(--ig-text)" : "2px solid transparent",
+          color: active ? "var(--ig-text)" : "var(--ig-text-muted)",
+          fontWeight: active ? 700 : 600,
+          fontSize: 13,
+          letterSpacing: 0.5,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
-    <div>
-      <h2>검색</h2>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && search()}
-          placeholder="검색어를 입력하세요"
-          style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #ccc" }}
-        />
-        <button
-          onClick={search}
-          disabled={loading}
-          style={{ padding: "8px 16px", background: "#1a73e8", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
-        >
-          {loading ? "..." : "검색"}
-        </button>
+    <div style={{ maxWidth: 600, margin: "0 auto" }}>
+      <div
+        className="ig-card"
+        style={{ padding: 14, marginBottom: 16 }}
+      >
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              background: "#fafafa",
+              border: "1px solid var(--ig-border)",
+              borderRadius: 8,
+              padding: "8px 12px",
+            }}
+          >
+            <span style={{ color: "var(--ig-text-muted)" }}>🔍</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && runSearch()}
+              placeholder="검색어를 입력하세요"
+              style={{ flex: 1, border: "none", background: "transparent", fontSize: 14 }}
+            />
+          </div>
+          <button
+            className="ig-btn-primary"
+            onClick={runSearch}
+            disabled={loading || !query.trim()}
+            style={{ padding: "9px 18px" }}
+          >
+            {loading ? "..." : "검색"}
+          </button>
+        </div>
       </div>
-      <div style={{ display: "flex", borderBottom: "1px solid #eee", marginBottom: 16 }}>
-        <button style={tabStyle("posts")} onClick={() => setActiveTab("posts")}>게시글 검색</button>
-        <button style={tabStyle("users")} onClick={() => setActiveTab("users")}>유저 검색</button>
-        <button style={tabStyle("expand")} onClick={() => setActiveTab("expand")}>AI 키워드 확장</button>
+
+      <div
+        style={{
+          display: "flex",
+          borderBottom: "1px solid var(--ig-border)",
+          marginBottom: 16,
+          justifyContent: "center",
+          gap: 30,
+        }}
+      >
+        {tabBtn("posts", "게시글")}
+        {tabBtn("users", "유저")}
+        {tabBtn("expand", "✨ AI 확장")}
       </div>
 
       {expanded.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <span style={{ color: "#888", fontSize: 13 }}>확장 키워드: </span>
-          {expanded.map((kw) => (
-            <span key={kw} style={{ background: "#fce8b2", borderRadius: 12, padding: "2px 8px", marginRight: 4, fontSize: 12 }}>
-              {kw}
-            </span>
+        <div
+          className="ig-card ig-fade-in"
+          style={{
+            padding: 12,
+            marginBottom: 14,
+            background: "#fff8e1",
+            borderColor: "#ffe082",
+          }}
+        >
+          <div style={{ color: "#7d6608", fontSize: 12, marginBottom: 6, fontWeight: 600 }}>
+            🤖 Solar AI가 확장한 키워드
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {expanded.map((kw) => (
+              <span
+                key={kw}
+                style={{
+                  background: "#ffe082",
+                  color: "#7d6608",
+                  padding: "3px 10px",
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                {kw}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "users" && userResults.length > 0 && (
+        <div className="ig-card">
+          {userResults.map((u, i) => (
+            <button
+              key={u}
+              onClick={() => onOpenProfile?.(u)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 14px",
+                width: "100%",
+                textAlign: "left",
+                borderTop: i === 0 ? "none" : "1px solid var(--ig-border-soft)",
+              }}
+            >
+              <Avatar username={u} size={44} />
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{u}</div>
+            </button>
           ))}
         </div>
       )}
 
-      {userResults.map((u) => (
-        <div key={u} style={{ padding: "8px 12px", border: "1px solid #eee", borderRadius: 6, marginBottom: 6, background: "#fff" }}>
-          @{u}
-        </div>
-      ))}
+      {(activeTab === "posts" || activeTab === "expand") &&
+        postResults.map((p) => (
+          <PostCard
+            key={p.id}
+            post={p}
+            currentUserId={currentUserId}
+            onOpenProfile={onOpenProfile}
+          />
+        ))}
 
-      {postResults.map((p) => (
-        <PostCard key={p.id} post={p} currentUserId={currentUserId} />
-      ))}
-
-      {userResults.length === 0 && postResults.length === 0 && query && !loading && (
-        <p style={{ color: "#888" }}>검색 결과가 없습니다.</p>
-      )}
+      {searched &&
+        !loading &&
+        userResults.length === 0 &&
+        postResults.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: "var(--ig-text-muted)" }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>🤷</div>
+            <p style={{ margin: 0 }}>검색 결과가 없습니다.</p>
+          </div>
+        )}
     </div>
   );
 }
