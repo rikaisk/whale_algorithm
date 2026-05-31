@@ -84,6 +84,82 @@ async def _generate_persona_with_solar(used_names: set[str]) -> dict:
     return {}
 
 
+def seed_ai_users_fallback_only() -> list[str]:
+    """
+    Solar API 호출 없이 fallback 데이터로만 AI 5명 + 게시글 + 팔로우 시드.
+    Render 슬립 깨어났을 때 자동 호출용. 빠르고 비용 0.
+    이미 AI 유저가 있으면 skip.
+    """
+    existing_ai = [u for u in user_store.values() if getattr(u, "is_ai", False)]
+    if existing_ai:
+        return []
+
+    used_names = {u.username.lower() for u in user_store.values()}
+    created_users: list[User] = []
+
+    for persona in FALLBACK_PERSONAS:
+        if persona["username"].lower() in used_names:
+            continue
+        used_names.add(persona["username"].lower())
+        user = User(
+            id=str(uuid.uuid4()),
+            username=persona["username"],
+            password_hash=auth.hash_password(str(uuid.uuid4())),
+            bio=persona["bio"],
+            interests=[],
+            following=[],
+            followers=[],
+            post_ids=[],
+            avatar_base64=None,
+            is_ai=True,
+            created_at=time.time(),
+        )
+        user_store.set(user.username, user)
+        search_trie.insert(user.username, user.username)
+        social_graph.add_node(user.id)
+        created_users.append(user)
+
+    for user in created_users:
+        contents = FALLBACK_POSTS.get(user.username, [])
+        count = min(len(contents), random.randint(3, 5))
+        chosen = random.sample(contents, k=count) if contents else []
+        for content in chosen:
+            post = Post(
+                id=str(uuid.uuid4()),
+                author_id=user.id,
+                content=content,
+                hashtags=[],
+                likes=0,
+                comment_ids=[],
+                image_base64=None,
+                liked_by=[],
+                created_at=time.time() - random.randint(0, 86400 * 3),
+            )
+            post_store.set(post.id, post)
+            feed_tree.insert((post.created_at, post.id))
+            user.post_ids.append(post.id)
+        user_store.set(user.username, user)
+
+    for i, user in enumerate(created_users):
+        if not created_users:
+            continue
+        others = [u for j, u in enumerate(created_users) if j != i]
+        if not others:
+            continue
+        targets = random.sample(others, k=min(len(others), random.randint(1, 3)))
+        for target in targets:
+            if target.id in user.following:
+                continue
+            user.following.append(target.id)
+            target.followers.append(user.id)
+            social_graph.add_edge(user.id, target.id)
+        user_store.set(user.username, user)
+        for target in targets:
+            user_store.set(target.username, target)
+
+    return [u.username for u in created_users]
+
+
 @router.post("/seed_ai_users")
 async def seed_ai_users():
     existing_ai = [u for u in user_store.values() if getattr(u, "is_ai", False)]

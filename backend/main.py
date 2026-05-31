@@ -16,6 +16,14 @@ from core import persistence
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     persistence.load_all()
+    try:
+        from routers.admin import seed_ai_users_fallback_only
+        seeded = seed_ai_users_fallback_only()
+        if seeded:
+            persistence.save_all()
+            print(f"[startup] Auto-seeded AI users: {seeded}")
+    except Exception as e:
+        print(f"[startup] Auto-seed skipped: {e}")
     yield
     persistence.save_all()
 
