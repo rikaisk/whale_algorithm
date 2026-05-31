@@ -37,6 +37,7 @@ PERSONAS = [
         "image_emoji": "☕",
         "image_colors": ("#f4a261", "#e76f51"),
         "tags": ["디저트", "카페", "베이커리"],
+        "photo_prompt": "cozy aesthetic cafe with pastel desserts and latte art, warm lighting",
     },
     {
         "username": "minho",
@@ -45,6 +46,7 @@ PERSONAS = [
         "image_emoji": "🏃",
         "image_colors": ("#2a9d8f", "#264653"),
         "tags": ["러닝", "마라톤", "체력"],
+        "photo_prompt": "person jogging at Han River park Seoul at sunrise, scenic",
     },
     {
         "username": "jisoo",
@@ -53,6 +55,7 @@ PERSONAS = [
         "image_emoji": "🎬",
         "image_colors": ("#3d348b", "#7678ed"),
         "tags": ["영화", "독립영화", "일본영화"],
+        "photo_prompt": "moody indie cinema theater dim lighting empty seats vintage poster",
     },
     {
         "username": "taeyang",
@@ -61,6 +64,7 @@ PERSONAS = [
         "image_emoji": "⛺",
         "image_colors": ("#2d6a4f", "#52b788"),
         "tags": ["캠핑", "백패킹", "별관측"],
+        "photo_prompt": "camping tent under starry night sky in mountain forest, milky way",
     },
     {
         "username": "haeun",
@@ -69,6 +73,7 @@ PERSONAS = [
         "image_emoji": "🧵",
         "image_colors": ("#f7b6d2", "#c77dff"),
         "tags": ["퀼팅", "자수", "고양이"],
+        "photo_prompt": "cozy workspace with embroidery hoop thread and cute cat sleeping nearby",
     },
     {
         "username": "yura",
@@ -77,6 +82,7 @@ PERSONAS = [
         "image_emoji": "👗",
         "image_colors": ("#cdb4db", "#ffafcc"),
         "tags": ["빈티지", "패션", "구제샵"],
+        "photo_prompt": "vintage 90s denim jacket flatlay with retro accessories aesthetic",
     },
     {
         "username": "dohyun",
@@ -85,6 +91,7 @@ PERSONAS = [
         "image_emoji": "🎮",
         "image_colors": ("#1a1a2e", "#e94560"),
         "tags": ["게임", "발로란트", "트위치"],
+        "photo_prompt": "gaming setup with RGB mechanical keyboard headset multiple monitors at night",
     },
     {
         "username": "seoyeon",
@@ -93,6 +100,7 @@ PERSONAS = [
         "image_emoji": "🧘",
         "image_colors": ("#a8dadc", "#457b9d"),
         "tags": ["요가", "필라테스", "명상"],
+        "photo_prompt": "yoga pose at sunrise on wooden floor with plants minimalist studio peaceful",
     },
     {
         "username": "taejun",
@@ -101,6 +109,7 @@ PERSONAS = [
         "image_emoji": "🎸",
         "image_colors": ("#e63946", "#f1faee"),
         "tags": ["음악", "기타", "밴드"],
+        "photo_prompt": "indie band live performance on small stage guitar amp moody lighting",
     },
     {
         "username": "jiwon",
@@ -109,6 +118,7 @@ PERSONAS = [
         "image_emoji": "🐾",
         "image_colors": ("#ffd6a5", "#fdffb6"),
         "tags": ["강아지", "포메", "산책"],
+        "photo_prompt": "cute fluffy pomeranian puppy in autumn park golden hour adorable",
     },
 ]
 
@@ -268,6 +278,13 @@ def get_persona_personality(username: str) -> str | None:
     for p in PERSONAS:
         if p["username"] == username:
             return p.get("personality")
+    return None
+
+
+def get_persona_photo_prompt(username: str) -> str | None:
+    for p in PERSONAS:
+        if p["username"] == username:
+            return p.get("photo_prompt")
     return None
 
 

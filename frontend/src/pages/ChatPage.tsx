@@ -65,6 +65,7 @@ export default function ChatPage({
           sender_id: data.sender_id,
           receiver_id: data.receiver_id,
           content: data.content,
+          image_url: data.image_url ?? null,
           created_at: data.created_at,
           read: false,
         };
@@ -361,23 +362,45 @@ export default function ChatPage({
                         {new Date(m.created_at * 1000).toLocaleString("ko-KR")}
                       </div>
                     )}
-                    <div style={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start" }}>
-                      <div
-                        style={{
-                          background: mine
-                            ? "linear-gradient(135deg, #4f5bd5 0%, #962fbf 50%, #d62976 100%)"
-                            : "#efefef",
-                          color: mine ? "#fff" : "var(--ig-text)",
-                          padding: "8px 14px",
-                          borderRadius: 18,
-                          maxWidth: "70%",
-                          fontSize: 14,
-                          lineHeight: 1.4,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {m.content}
-                      </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: mine ? "flex-end" : "flex-start",
+                        gap: 4,
+                      }}
+                    >
+                      {m.content && (
+                        <div
+                          style={{
+                            background: mine
+                              ? "linear-gradient(135deg, #4f5bd5 0%, #962fbf 50%, #d62976 100%)"
+                              : "#efefef",
+                            color: mine ? "#fff" : "var(--ig-text)",
+                            padding: "8px 14px",
+                            borderRadius: 18,
+                            maxWidth: "70%",
+                            fontSize: 14,
+                            lineHeight: 1.4,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {m.content}
+                        </div>
+                      )}
+                      {m.image_url && (
+                        <img
+                          src={m.image_url}
+                          alt="AI 생성 이미지"
+                          loading="lazy"
+                          style={{
+                            maxWidth: "70%",
+                            maxHeight: 280,
+                            borderRadius: 14,
+                            border: "1px solid var(--ig-border)",
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 );

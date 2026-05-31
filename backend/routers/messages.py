@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel
 from dataclasses import asdict
 import asyncio
+import random
+import urllib.parse
 import uuid
 import time
 import json
@@ -10,6 +12,28 @@ from core.store import user_store, message_store
 from core.models import Message
 from core import auth, persistence
 import core.solar as solar
+
+
+_IMAGE_REQUEST_KEYWORDS = (
+    "사진", "보여줘", "보내줘", "보내봐", "찍어", "보이고", "보내",
+    "photo", "pic", "show me", "image", "selfie",
+)
+
+
+def _wants_image(user_message: str) -> bool:
+    lower = user_message.lower()
+    if any(k in user_message for k in _IMAGE_REQUEST_KEYWORDS):
+        return True
+    if any(k in lower for k in _IMAGE_REQUEST_KEYWORDS):
+        return True
+    # 30% random chance otherwise
+    return random.random() < 0.3
+
+
+def _build_pollinations_url(prompt: str) -> str:
+    encoded = urllib.parse.quote(prompt)
+    seed = random.randint(1, 1_000_000)
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=512&height=512&seed={seed}&nologo=true"
 
 router = APIRouter(tags=["messages"])
 
@@ -75,7 +99,7 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
     if receiver is None or not getattr(receiver, "is_ai", False):
         return
 
-    from routers.admin import get_persona_personality
+    from routers.admin import get_persona_personality, get_persona_photo_prompt
     personality = get_persona_personality(receiver.username)
 
     reply_text = await solar.persona_reply(
@@ -84,11 +108,18 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
     if not reply_text:
         return
 
+    # Decide if image attached
+    image_url = None
+    photo_prompt = get_persona_photo_prompt(receiver.username)
+    if photo_prompt and _wants_image(incoming_content):
+        image_url = _build_pollinations_url(photo_prompt)
+
     reply = Message(
         id=str(uuid.uuid4()),
         sender_id=receiver_id,
         receiver_id=sender_id,
         content=reply_text,
+        image_url=image_url,
         created_at=time.time(),
         read=False,
     )
@@ -105,6 +136,7 @@ async def _maybe_ai_reply(sender_id: str, receiver_id: str, incoming_content: st
         "sender_username": receiver.username,
         "receiver_id": sender_id,
         "content": reply.content,
+        "image_url": image_url,
         "created_at": reply.created_at,
     }
     await manager.send_to(sender_id, payload)

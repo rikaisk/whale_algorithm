@@ -64,6 +64,7 @@ export interface DmMessage {
   sender_id: string;
   receiver_id: string;
   content: string;
+  image_url?: string | null;
   created_at: number;
   read: boolean;
 }

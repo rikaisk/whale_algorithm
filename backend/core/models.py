@@ -47,5 +47,6 @@ class Message:
     sender_id: str
     receiver_id: str
     content: str
+    image_url: Optional[str] = None
     created_at: float = 0.0
     read: bool = False
