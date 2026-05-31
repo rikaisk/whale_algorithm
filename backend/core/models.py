@@ -15,6 +15,9 @@ class User:
     avatar_base64: Optional[str] = None
     is_ai: bool = False
     created_at: float = 0.0
+    # 클라이언트 대신 서버에 보관하는 개인 데이터
+    search_history: list = field(default_factory=list)
+    bot_sessions: list = field(default_factory=list)
 
 
 @dataclass

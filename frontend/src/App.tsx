@@ -7,6 +7,8 @@ import {
   setToken,
   getToken,
   getInterestCategories,
+  getUnreadCount,
+  userExists,
   type InterestCategory,
 } from "./api/client";
 import Avatar from "./components/Avatar";
@@ -38,11 +40,14 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("feed");
   const [profileTarget, setProfileTarget] = useState("");
   const [chatPeer, setChatPeer] = useState("");
+  const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   // 회원가입 관심 분야 선택 단계
   const [regStep, setRegStep] = useState<0 | 1>(0);
   const [categories, setCategories] = useState<InterestCategory[]>([]);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  // 회원가입 유저명 중복 검사 (입력창에서 실시간 안내)
+  const [nameStatus, setNameStatus] = useState<"idle" | "checking" | "taken" | "ok">("idle");
 
   useEffect(() => {
     const token = getToken();
@@ -62,6 +67,50 @@ export default function App() {
     if (!loggedIn) return;
     getMe().then((me) => setMyAvatar(me.avatar_base64 ?? null)).catch(() => {});
   }, [tab, loggedIn]);
+
+  // 안 읽은 메시지 수: 탭 전환 시 + 주기적으로 갱신
+  useEffect(() => {
+    if (!loggedIn) {
+      setUnread(0);
+      return;
+    }
+    let alive = true;
+    const refresh = () =>
+      getUnreadCount()
+        .then((r) => {
+          if (alive) setUnread(r.unread);
+        })
+        .catch(() => {});
+    refresh();
+    const id = window.setInterval(refresh, 12000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [loggedIn, tab]);
+
+  // 회원가입 모드에서 유저명 중복을 입력창에서 실시간(디바운스) 안내
+  useEffect(() => {
+    if (loggedIn || mode !== "register") {
+      setNameStatus("idle");
+      return;
+    }
+    const name = input.trim();
+    if (!name) {
+      setNameStatus("idle");
+      return;
+    }
+    setNameStatus("checking");
+    const t = window.setTimeout(async () => {
+      try {
+        const exists = await userExists(name);
+        setNameStatus(exists ? "taken" : "ok");
+      } catch {
+        setNameStatus("idle");
+      }
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [input, mode, loggedIn]);
 
   const login = async () => {
     setError("");
@@ -85,6 +134,7 @@ export default function App() {
   const goToInterestStep = async () => {
     setError("");
     if (!input.trim() || password.length < 4) return;
+    if (nameStatus === "taken") return;
     setRegStep(1);
     if (categories.length === 0) {
       try {
@@ -143,6 +193,12 @@ export default function App() {
   const openChat = (target: string) => {
     setChatPeer(target);
     setTab("chat");
+  };
+
+  const refreshUnread = () => {
+    getUnreadCount()
+      .then((r) => setUnread(r.unread))
+      .catch(() => {});
   };
 
   if (!loggedIn) {
@@ -290,6 +346,26 @@ export default function App() {
               onKeyDown={(e) => e.key === "Enter" && submitForm()}
               placeholder="유저명"
             />
+            {!isLogin && input.trim() && nameStatus !== "idle" && (
+              <p
+                style={{
+                  margin: "-2px 2px 0",
+                  fontSize: 12,
+                  color:
+                    nameStatus === "taken"
+                      ? "var(--ig-danger)"
+                      : nameStatus === "ok"
+                      ? "#2e7d32"
+                      : "var(--ig-text-muted)",
+                }}
+              >
+                {nameStatus === "checking"
+                  ? "유저명 확인 중..."
+                  : nameStatus === "taken"
+                  ? "이미 사용 중인 유저명입니다"
+                  : "사용 가능한 유저명입니다"}
+              </p>
+            )}
             <input
               className="ig-input"
               type="password"
@@ -300,7 +376,12 @@ export default function App() {
             />
             <button
               className="ig-btn-primary"
-              disabled={loading || !input.trim() || password.length < 4}
+              disabled={
+                loading ||
+                !input.trim() ||
+                password.length < 4 ||
+                (!isLogin && (nameStatus === "taken" || nameStatus === "checking"))
+              }
               onClick={isLogin ? login : goToInterestStep}
               style={{ marginTop: 8, padding: "10px 0", borderRadius: 8 }}
             >
@@ -387,6 +468,7 @@ export default function App() {
           <nav style={{ display: "flex", gap: 4 }}>
             {NAV.map((n) => {
               const active = tab === n.id;
+              const showBadge = n.id === "chat" && unread > 0;
               return (
                 <button
                   key={n.id}
@@ -396,6 +478,7 @@ export default function App() {
                   }}
                   title={n.label}
                   style={{
+                    position: "relative",
                     padding: "8px 14px",
                     borderRadius: 8,
                     fontSize: 18,
@@ -406,6 +489,28 @@ export default function App() {
                   }}
                 >
                   {n.icon}
+                  {showBadge && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        right: 4,
+                        bottom: 2,
+                        minWidth: 16,
+                        height: 16,
+                        padding: "0 4px",
+                        borderRadius: 8,
+                        background: "#ed4956",
+                        color: "#fff",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        lineHeight: "16px",
+                        textAlign: "center",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -434,6 +539,7 @@ export default function App() {
             onOpenProfile={openProfile}
             initialPeer={chatPeer}
             onPeerConsumed={() => setChatPeer("")}
+            onConversationRead={refreshUnread}
           />
         )}
         {tab === "profile" && (

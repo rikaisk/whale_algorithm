@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from "react";
 import type { Post, BotTurn } from "../api/client";
-import { searchUsers, searchPosts, askChatbot } from "../api/client";
-import { getHistory, addHistory, removeHistory, type HistoryItem } from "../api/searchHistory";
+import {
+  searchUsers,
+  searchPosts,
+  askChatbot,
+  fetchSearchHistory,
+  saveSearchHistory,
+  fetchBotSessions,
+  saveBotSessions,
+} from "../api/client";
+import { pushHistory, removeFromHistory, type HistoryItem } from "../api/searchHistory";
 import {
   type BotSession,
-  getSessions,
-  saveSessions,
-  getActiveId,
-  setActiveId,
   createSession,
   pickQuestions,
   titleFromMessage,
@@ -56,7 +60,22 @@ export default function SearchPage({
   const [userResults, setUserResults] = useState<string[]>([]);
   const [postResults, setPostResults] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>(getHistory());
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  // 검색 기록을 서버에서 로드 + 변경 시 서버에 저장
+  useEffect(() => {
+    fetchSearchHistory()
+      .then((items) => setHistory((items as HistoryItem[]) || []))
+      .catch(() => {});
+  }, []);
+
+  const updateHistory = (updater: (prev: HistoryItem[]) => HistoryItem[]) => {
+    setHistory((prev) => {
+      const next = updater(prev);
+      saveSearchHistory(next).catch(() => {});
+      return next;
+    });
+  };
 
   // Chatbot (세션 기반)
   const [botInput, setBotInput] = useState("");
@@ -73,27 +92,28 @@ export default function SearchPage({
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
   const botMessages = activeSession?.messages ?? [];
 
-  // 세션 로드/초기화
+  // 가이드봇 대화 세션을 서버에서 로드/초기화
   useEffect(() => {
-    let list = getSessions();
-    let active = getActiveId() ?? "";
-    if (list.length === 0) {
-      const s = createSession();
-      list = [s];
-      active = s.id;
-      saveSessions(list);
-      setActiveId(active);
-    } else if (!list.some((s) => s.id === active)) {
-      active = list[0].id;
-      setActiveId(active);
-    }
-    setSessions(list);
-    setActiveSessionId(active);
+    fetchBotSessions()
+      .then((items) => {
+        let list = (items as BotSession[]) || [];
+        if (list.length === 0) {
+          list = [createSession()];
+          saveBotSessions(list).catch(() => {});
+        }
+        setSessions(list);
+        setActiveSessionId(list[0].id);
+      })
+      .catch(() => {
+        const list = [createSession()];
+        setSessions(list);
+        setActiveSessionId(list[0].id);
+      });
   }, []);
 
   const persist = (list: BotSession[]) => {
     setSessions(list);
-    saveSessions(list);
+    saveBotSessions(list).catch(() => {});
   };
 
   const newSession = () => {
@@ -101,14 +121,12 @@ export default function SearchPage({
     const list = [s, ...sessions];
     persist(list);
     setActiveSessionId(s.id);
-    setActiveId(s.id);
     setSessionMenuOpen(false);
     setExampleQs(pickQuestions(4));
   };
 
   const switchSession = (id: string) => {
     setActiveSessionId(id);
-    setActiveId(id);
     setSessionMenuOpen(false);
     setExampleQs(pickQuestions(4));
   };
@@ -116,13 +134,11 @@ export default function SearchPage({
   const deleteSession = (id: string) => {
     let list = sessions.filter((s) => s.id !== id);
     if (list.length === 0) {
-      const s = createSession();
-      list = [s];
+      list = [createSession()];
     }
     persist(list);
     if (id === activeId) {
       setActiveSessionId(list[0].id);
-      setActiveId(list[0].id);
     }
   };
 
@@ -158,8 +174,7 @@ export default function SearchPage({
   }, [botMessages]);
 
   const handleOpenUser = (u: string) => {
-    addHistory({ type: "user", username: u });
-    setHistory(getHistory());
+    updateHistory((prev) => pushHistory(prev, { type: "user", username: u }));
     onOpenProfile?.(u);
   };
 
@@ -289,10 +304,7 @@ export default function SearchPage({
                 <h4 style={{ margin: 0, fontSize: 14 }}>최근 검색</h4>
                 {history.length > 0 && (
                   <button
-                    onClick={() => {
-                      localStorage.removeItem("wg_search_history");
-                      setHistory([]);
-                    }}
+                    onClick={() => updateHistory(() => [])}
                     style={{ color: "var(--ig-accent)", fontSize: 12, fontWeight: 600 }}
                   >
                     모두 지우기
@@ -363,10 +375,9 @@ export default function SearchPage({
                       </>
                     )}
                     <button
-                      onClick={() => {
-                        removeHistory((x) => x.ts === h.ts);
-                        setHistory(getHistory());
-                      }}
+                      onClick={() =>
+                        updateHistory((prev) => removeFromHistory(prev, (x) => x.ts === h.ts))
+                      }
                       style={{ color: "var(--ig-text-muted)", fontSize: 16, padding: "0 4px" }}
                       title="제거"
                     >
@@ -436,15 +447,16 @@ export default function SearchPage({
                   {postResults.map((p) => (
                     <div
                       key={p.id}
-                      onMouseDown={() => {
-                        addHistory({
-                          type: "post",
-                          postId: p.id,
-                          preview: p.content.slice(0, 40),
-                          authorUsername: p.author_username,
-                        });
-                        setHistory(getHistory());
-                      }}
+                      onMouseDown={() =>
+                        updateHistory((prev) =>
+                          pushHistory(prev, {
+                            type: "post",
+                            postId: p.id,
+                            preview: p.content.slice(0, 40),
+                            authorUsername: p.author_username,
+                          }),
+                        )
+                      }
                     >
                       <PostCard
                         post={p}

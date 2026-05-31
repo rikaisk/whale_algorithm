@@ -1,4 +1,6 @@
 // WhaleGram 가이드 봇 대화 세션 (LLM처럼 세션 분리 + 과거 내역 저장)
+// 대화 내역은 브라우저가 아니라 서버(data.json)에 보관한다.
+// 저장/로딩은 client.ts의 fetchBotSessions / saveBotSessions로 서버와 동기화.
 export interface BotMessage {
   role: "user" | "bot";
   text: string;
@@ -11,9 +13,6 @@ export interface BotSession {
   createdAt: number;
   updatedAt: number;
 }
-
-const KEY = "wg_bot_sessions";
-const ACTIVE_KEY = "wg_bot_active";
 
 // 범용 예시 질문 풀 (특정 인물 질문 제외) — 상황에 따라 무작위로 노출
 export const QUESTION_POOL: string[] = [
@@ -49,33 +48,6 @@ export function pickQuestions(n = 4): string[] {
 
 function uid(): string {
   return `s_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
-}
-
-export function getSessions(): BotSession[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveSessions(list: BotSession[]): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(list));
-  } catch {}
-}
-
-export function getActiveId(): string | null {
-  return localStorage.getItem(ACTIVE_KEY);
-}
-
-export function setActiveId(id: string): void {
-  try {
-    localStorage.setItem(ACTIVE_KEY, id);
-  } catch {}
 }
 
 export function createSession(): BotSession {

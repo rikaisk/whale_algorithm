@@ -21,14 +21,17 @@ async def lifespan(app: FastAPI):
             seed_ai_users_fallback_only,
             backfill_ai_post_images,
             backfill_ai_user_interests,
+            prune_orphan_ai_users,
         )
+        pruned = prune_orphan_ai_users()
         seeded = seed_ai_users_fallback_only()
         backfilled = backfill_ai_post_images()
         interests_fixed = backfill_ai_user_interests()
-        if seeded or backfilled or interests_fixed:
+        if pruned or seeded or backfilled or interests_fixed:
             persistence.save_all()
             print(
-                f"[startup] Auto-seeded AI users: {seeded}; "
+                f"[startup] Pruned old AI users: {pruned}; "
+                f"Auto-seeded AI users: {seeded}; "
                 f"backfilled images: {backfilled}; interests: {interests_fixed}"
             )
     except Exception as e:

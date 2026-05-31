@@ -21,13 +21,13 @@ _IMAGE_REQUEST_KEYWORDS = (
 
 
 def _wants_image(user_message: str) -> bool:
+    # 사진/이미지를 명시적으로 요청했을 때만 사진으로 답함 (무작위 첨부 없음)
     lower = user_message.lower()
     if any(k in user_message for k in _IMAGE_REQUEST_KEYWORDS):
         return True
     if any(k in lower for k in _IMAGE_REQUEST_KEYWORDS):
         return True
-    # 30% random chance otherwise
-    return random.random() < 0.3
+    return False
 
 
 def _build_pollinations_url(prompt: str) -> str:
@@ -182,6 +182,16 @@ async def send_message(
     return {"id": msg.id, "created_at": msg.created_at}
 
 
+@router.get("/messages/unread_count")
+def unread_count(user_id: str = Depends(auth.get_current_user)):
+    """나에게 온 안 읽은 메시지 총 개수."""
+    total = sum(
+        1 for msg in message_store.values()
+        if msg.receiver_id == user_id and not msg.read
+    )
+    return {"unread": total}
+
+
 @router.get("/messages/{peer_username}")
 def get_conversation(
     peer_username: str,
@@ -192,10 +202,22 @@ def get_conversation(
         raise HTTPException(status_code=404, detail="User not found")
 
     conversation = []
+    changed = False
     for msg in message_store.values():
         if (msg.sender_id == user_id and msg.receiver_id == peer_id) or \
            (msg.sender_id == peer_id and msg.receiver_id == user_id):
+            # 상대가 보낸 메시지를 열람 → 읽음 처리
+            if msg.sender_id == peer_id and msg.receiver_id == user_id and not msg.read:
+                msg.read = True
+                message_store.set(msg.id, msg)
+                changed = True
             conversation.append(asdict(msg))
+
+    if changed:
+        try:
+            persistence.save_all()
+        except Exception:
+            pass
 
     conversation.sort(key=lambda m: m["created_at"])
     return conversation

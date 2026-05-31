@@ -25,12 +25,14 @@ export default function ChatPage({
   onOpenProfile,
   initialPeer,
   onPeerConsumed,
+  onConversationRead,
 }: {
   username: string;
   userId: string;
   onOpenProfile?: (username: string) => void;
   initialPeer?: string;
   onPeerConsumed?: () => void;
+  onConversationRead?: () => void;
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [peer, setPeer] = useState<string>("");
@@ -109,7 +111,14 @@ export default function ChatPage({
       setMessages([]);
       return;
     }
-    getConversation(peer).then(setMessages).catch(() => setMessages([]));
+    getConversation(peer)
+      .then((msgs) => {
+        setMessages(msgs);
+        // 대화를 열면 서버에서 읽음 처리됨 → 안 읽은 배지 갱신
+        onConversationRead?.();
+      })
+      .catch(() => setMessages([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peer]);
 
   useEffect(() => {

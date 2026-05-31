@@ -230,6 +230,22 @@ export const getConversation = (peer_username: string): Promise<DmMessage[]> =>
 export const listConversations = (): Promise<ConversationSummary[]> =>
   api.get("/messages").then((r) => r.data);
 
+export const getUnreadCount = (): Promise<{ unread: number }> =>
+  api.get("/messages/unread_count").then((r) => r.data);
+
+// 서버에 보관되는 개인 데이터 (검색 기록 / 가이드봇 대화)
+export const fetchSearchHistory = (): Promise<any[]> =>
+  api.get("/me/search_history").then((r) => r.data.items ?? []);
+
+export const saveSearchHistory = (items: any[]): Promise<void> =>
+  api.put("/me/search_history", { items }).then(() => undefined);
+
+export const fetchBotSessions = (): Promise<any[]> =>
+  api.get("/me/bot_sessions").then((r) => r.data.items ?? []);
+
+export const saveBotSessions = (items: any[]): Promise<void> =>
+  api.put("/me/bot_sessions", { items }).then(() => undefined);
+
 export const openMessageSocket = (token: string): WebSocket => {
   const wsBase = API_BASE.replace(/^http/, "ws");
   return new WebSocket(`${wsBase}/ws?token=${encodeURIComponent(token)}`);

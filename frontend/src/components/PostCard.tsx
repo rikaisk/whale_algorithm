@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Post, Comment } from "../api/client";
 import { likePost, getComments, createComment, createReply, deleteComment } from "../api/client";
 import Avatar from "./Avatar";
@@ -18,6 +18,7 @@ function CommentNode({
   currentUsername,
   currentAvatar,
   onDelete,
+  onChanged,
   onOpenProfile,
 }: {
   comment: Comment;
@@ -25,32 +26,21 @@ function CommentNode({
   currentUsername: string;
   currentAvatar?: string | null;
   onDelete: (id: string) => void;
+  onChanged?: () => void;
   onOpenProfile?: (username: string) => void;
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReply, setShowReply] = useState(false);
-  const [replies, setReplies] = useState(comment.replies);
   const authorName = comment.author_username ?? comment.author_id.slice(0, 8);
+  const replies = comment.replies ?? [];
 
   const submitReply = async () => {
     const text = replyText.trim();
     if (!text) return;
-    const res = await createReply(comment.id, text);
-    setReplies((prev) => [
-      ...prev,
-      {
-        id: res.id,
-        post_id: comment.post_id,
-        author_id: currentUserId,
-        author_username: currentUsername,
-        content: text,
-        parent_id: comment.id,
-        created_at: res.created_at,
-        replies: [],
-      },
-    ]);
+    await createReply(comment.id, text);
     setReplyText("");
     setShowReply(false);
+    onChanged?.();
   };
 
   return (
@@ -124,6 +114,7 @@ function CommentNode({
             currentUsername={currentUsername}
             currentAvatar={currentAvatar}
             onDelete={onDelete}
+            onChanged={onChanged}
             onOpenProfile={onOpenProfile}
           />
         ))}
@@ -167,38 +158,41 @@ export default function PostCard({
     setLiked(res.liked_by_me);
   };
 
+  const refreshComments = async () => {
+    try {
+      setComments(await getComments(post.id));
+    } catch {
+      /* 무시 */
+    }
+  };
+
   const loadComments = async () => {
-    if (!showComments && comments.length === 0) {
-      const data = await getComments(post.id);
-      setComments(data);
+    if (!showComments) {
+      await refreshComments();
     }
     setShowComments(!showComments);
   };
 
+  // 댓글이 펼쳐져 있는 동안 이벤트 없이도 실시간(폴링) 갱신
+  useEffect(() => {
+    if (!showComments) return;
+    const id = window.setInterval(refreshComments, 5000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showComments, post.id]);
+
   const submitComment = async () => {
     const text = commentText.trim();
     if (!text) return;
-    const res = await createComment(post.id, text);
-    setComments((prev) => [
-      ...prev,
-      {
-        id: res.id,
-        post_id: post.id,
-        author_id: currentUserId,
-        author_username: currentUsername,
-        content: text,
-        parent_id: null,
-        created_at: res.created_at,
-        replies: [],
-      },
-    ]);
+    await createComment(post.id, text);
     setCommentText("");
     if (!showComments) setShowComments(true);
+    await refreshComments();
   };
 
   const handleDeleteComment = async (commentId: string) => {
     await deleteComment(commentId);
-    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    await refreshComments();
   };
 
   const heartColor = liked || likeHover ? "var(--ig-danger)" : "var(--ig-text)";
@@ -341,6 +335,7 @@ export default function PostCard({
                 currentUsername={currentUsername ?? ""}
                 currentAvatar={currentAvatar}
                 onDelete={handleDeleteComment}
+                onChanged={refreshComments}
                 onOpenProfile={onOpenProfile}
               />
             ))}
