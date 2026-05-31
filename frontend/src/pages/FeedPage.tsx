@@ -9,10 +9,12 @@ const MAX_IMAGE_BYTES = 1_000_000;
 export default function FeedPage({
   username,
   userId,
+  currentAvatar,
   onOpenProfile,
 }: {
   username: string;
   userId: string;
+  currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -96,7 +98,7 @@ export default function FeedPage({
         style={{ marginBottom: 20, padding: 14 }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Avatar username={username} size={40} ring />
+          <Avatar username={username} size={40} ring src={currentAvatar} />
           <button
             onClick={() => setComposerOpen(!composerOpen)}
             style={{
@@ -222,6 +224,8 @@ export default function FeedPage({
             key={p.id}
             post={p}
             currentUserId={userId}
+            currentUsername={username}
+            currentAvatar={currentAvatar}
             onDelete={p.author_id === userId ? handleDelete : undefined}
             onOpenProfile={onOpenProfile}
           />

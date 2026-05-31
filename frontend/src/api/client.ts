@@ -94,6 +94,19 @@ export const getMe = (): Promise<{
 export const getUserPosts = (username: string): Promise<Post[]> =>
   api.get(`/users/${username}/posts`).then((r) => r.data);
 
+export interface UserMini {
+  username: string;
+  avatar_base64?: string | null;
+  is_ai?: boolean;
+  bio?: string;
+}
+
+export const getFollowers = (username: string): Promise<UserMini[]> =>
+  api.get(`/users/${username}/followers`).then((r) => r.data);
+
+export const getFollowing = (username: string): Promise<UserMini[]> =>
+  api.get(`/users/${username}/following`).then((r) => r.data);
+
 export const updateAvatar = (username: string, avatar_base64: string | null) =>
   api.patch(`/users/${username}/avatar`, { avatar_base64 }).then((r) => r.data);
 

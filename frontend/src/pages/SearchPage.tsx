@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Post } from "../api/client";
 import { searchUsers, searchPosts, expandSearch } from "../api/client";
 import PostCard from "../components/PostCard";
@@ -8,9 +8,13 @@ type Tab = "posts" | "users" | "expand";
 
 export default function SearchPage({
   currentUserId,
+  currentUsername,
+  currentAvatar,
   onOpenProfile,
 }: {
   currentUserId: string;
+  currentUsername?: string;
+  currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -20,6 +24,30 @@ export default function SearchPage({
   const [activeTab, setActiveTab] = useState<Tab>("posts");
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const debounceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q) {
+      setUserResults([]);
+      setSearched(false);
+      return;
+    }
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const res = await searchUsers(q);
+        setUserResults(res.results || []);
+        setSearched(true);
+      } catch {
+        setUserResults([]);
+      }
+    }, 150);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [query, activeTab]);
 
   const runSearch = async () => {
     if (!query.trim()) return;
@@ -186,6 +214,8 @@ export default function SearchPage({
             key={p.id}
             post={p}
             currentUserId={currentUserId}
+            currentUsername={currentUsername}
+            currentAvatar={currentAvatar}
             onOpenProfile={onOpenProfile}
           />
         ))}

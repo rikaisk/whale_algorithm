@@ -111,6 +111,11 @@ export default function App() {
 
   if (!loggedIn) {
     const isLogin = mode === "login";
+    const submitForm = () => {
+      if (loading || !input.trim() || password.length < 4) return;
+      if (isLogin) login();
+      else register();
+    };
     return (
       <div
         style={{
@@ -146,6 +151,7 @@ export default function App() {
               className="ig-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitForm()}
               placeholder="유저명"
             />
             <input
@@ -153,6 +159,7 @@ export default function App() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitForm()}
               placeholder="비밀번호 (4자 이상)"
             />
             {!isLogin && (
@@ -161,7 +168,13 @@ export default function App() {
                 style={{ resize: "vertical", minHeight: 64 }}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                placeholder="자기소개 (Solar AI가 관심사를 추출합니다)"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submitForm();
+                  }
+                }}
+                placeholder="자기소개 (Shift+Enter 줄바꿈, Enter 제출)"
                 rows={2}
               />
             )}
@@ -291,15 +304,16 @@ export default function App() {
       </header>
 
       <main style={{ maxWidth: 935, margin: "0 auto", padding: "24px 20px" }}>
-        {tab === "feed" && <FeedPage username={username} userId={userId} onOpenProfile={openProfile} />}
-        {tab === "search" && <SearchPage currentUserId={userId} onOpenProfile={openProfile} />}
-        {tab === "recommend" && <RecommendPage username={username} userId={userId} onOpenProfile={openProfile} />}
-        {tab === "chat" && <ChatPage username={username} userId={userId} />}
+        {tab === "feed" && <FeedPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
+        {tab === "search" && <SearchPage currentUserId={userId} currentUsername={username} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
+        {tab === "recommend" && <RecommendPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
+        {tab === "chat" && <ChatPage username={username} userId={userId} onOpenProfile={openProfile} />}
         {tab === "profile" && (
           <ProfilePage
             targetUsername={profileTarget || username}
             currentUsername={username}
             currentUserId={userId}
+            currentAvatar={myAvatar}
             onOpenProfile={openProfile}
           />
         )}

@@ -105,6 +105,40 @@ def get_user_posts(
     return posts
 
 
+@router.get("/{username}/followers")
+def get_followers(username: str):
+    user = _get_user(username)
+    id_to_user = {u.id: u for u in user_store.values()}
+    out = []
+    for uid in user.followers:
+        u = id_to_user.get(uid)
+        if u:
+            out.append({
+                "username": u.username,
+                "avatar_base64": u.avatar_base64,
+                "is_ai": u.is_ai,
+                "bio": u.bio,
+            })
+    return out
+
+
+@router.get("/{username}/following")
+def get_following(username: str):
+    user = _get_user(username)
+    id_to_user = {u.id: u for u in user_store.values()}
+    out = []
+    for uid in user.following:
+        u = id_to_user.get(uid)
+        if u:
+            out.append({
+                "username": u.username,
+                "avatar_base64": u.avatar_base64,
+                "is_ai": u.is_ai,
+                "bio": u.bio,
+            })
+    return out
+
+
 @router.patch("/{username}/bio")
 async def update_bio(
     username: str,

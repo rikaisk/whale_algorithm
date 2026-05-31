@@ -5,6 +5,7 @@ import {
   openMessageSocket,
   getToken,
   userExists,
+  searchUsers,
   type ConversationSummary,
   type DmMessage,
 } from "../api/client";
@@ -18,15 +19,26 @@ function relTime(ts: number): string {
   return `${Math.floor(diff / 86400)}일`;
 }
 
-export default function ChatPage({ username, userId }: { username: string; userId: string }) {
+export default function ChatPage({
+  username,
+  userId,
+  onOpenProfile,
+}: {
+  username: string;
+  userId: string;
+  onOpenProfile?: (username: string) => void;
+}) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [peer, setPeer] = useState<string>("");
   const [peerInput, setPeerInput] = useState<string>("");
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [draft, setDraft] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const debounceRef = useRef<number | null>(null);
 
   const refreshConversations = async () => {
     try {
@@ -85,6 +97,28 @@ export default function ChatPage({ username, userId }: { username: string; userI
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Autocomplete (debounced)
+  useEffect(() => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    const q = peerInput.trim();
+    if (!q) {
+      setSuggestions([]);
+      return;
+    }
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const res = await searchUsers(q);
+        const list: string[] = (res.results || []).filter((u: string) => u !== username);
+        setSuggestions(list.slice(0, 8));
+      } catch {
+        setSuggestions([]);
+      }
+    }, 150);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [peerInput, username]);
+
   const send = () => {
     const content = draft.trim();
     if (!content || !peer) return;
@@ -97,8 +131,8 @@ export default function ChatPage({ username, userId }: { username: string; userI
     setDraft("");
   };
 
-  const startConversation = async () => {
-    const target = peerInput.trim();
+  const startConversation = async (override?: string) => {
+    const target = (override ?? peerInput).trim();
     if (!target) return;
     if (target === username) {
       setError("본인이 아닌 다른 유저명을 입력하세요.");
@@ -108,10 +142,14 @@ export default function ChatPage({ username, userId }: { username: string; userI
     if (!exists) {
       setError("존재하지 않는 사용자입니다");
       setPeer("");
+      setShowSuggestions(false);
       return;
     }
+    setPeerInput(target);
     setPeer(target);
     setError("");
+    setShowSuggestions(false);
+    setSuggestions([]);
   };
 
   return (
@@ -130,26 +168,66 @@ export default function ChatPage({ username, userId }: { username: string; userI
         <header style={{ padding: 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>{username}</h3>
         </header>
-        <div style={{ padding: 12 }}>
+        <div style={{ padding: 12, position: "relative" }}>
           <div style={{ display: "flex", gap: 6 }}>
             <input
               className="ig-input"
               value={peerInput}
               onChange={(e) => {
                 setPeerInput(e.target.value);
+                setShowSuggestions(true);
                 if (error) setError("");
               }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder="유저명 입력"
               onKeyDown={(e) => e.key === "Enter" && startConversation()}
             />
             <button
               className="ig-btn-primary"
-              onClick={startConversation}
-              style={{ padding: "8px 12px", fontSize: 13 }}
+              onClick={() => startConversation()}
+              title="대화 시작"
+              style={{ padding: "8px 14px", fontSize: 16 }}
             >
-              대화
+              🔍
             </button>
           </div>
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              className="ig-card"
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 12,
+                right: 12,
+                zIndex: 50,
+                marginTop: 4,
+                maxHeight: 220,
+                overflowY: "auto",
+                boxShadow: "var(--ig-shadow-lg)",
+              }}
+            >
+              {suggestions.map((u, i) => (
+                <button
+                  key={u}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => startConversation(u)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 12px",
+                    width: "100%",
+                    textAlign: "left",
+                    borderTop: i === 0 ? "none" : "1px solid var(--ig-border-soft)",
+                  }}
+                >
+                  <Avatar username={u} size={28} />
+                  <span style={{ fontSize: 14 }}>{u}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {error && (
             <p style={{ color: "var(--ig-danger)", fontSize: 12, margin: "6px 2px 0" }}>
               {error}
@@ -225,13 +303,23 @@ export default function ChatPage({ username, userId }: { username: string; userI
         ) : (
           <>
             <header
+              onClick={onOpenProfile ? () => onOpenProfile(peer) : undefined}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
                 padding: 14,
                 borderBottom: "1px solid var(--ig-border)",
+                cursor: onOpenProfile ? "pointer" : "default",
+                transition: "background 0.15s",
               }}
+              onMouseEnter={(e) => {
+                if (onOpenProfile) e.currentTarget.style.background = "#fafafa";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+              title={onOpenProfile ? "프로필 보기" : undefined}
             >
               <Avatar username={peer} size={36} />
               <div style={{ fontWeight: 600, fontSize: 15 }}>{peer}</div>

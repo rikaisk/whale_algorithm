@@ -79,7 +79,7 @@ export default function Avatar({ username, size = 36, ring = false, src, onClick
         style={{
           padding: 2,
           borderRadius: "50%",
-          background: "var(--ig-grad-1)",
+          background: "var(--ig-border)",
           display: "inline-flex",
           cursor: onClick ? "pointer" : "default",
         }}

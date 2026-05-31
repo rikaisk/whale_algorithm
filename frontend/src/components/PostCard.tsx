@@ -15,11 +15,15 @@ function relativeTime(ts: number): string {
 function CommentNode({
   comment,
   currentUserId,
+  currentUsername,
+  currentAvatar,
   onDelete,
   onOpenProfile,
 }: {
   comment: Comment;
   currentUserId: string;
+  currentUsername: string;
+  currentAvatar?: string | null;
   onDelete: (id: string) => void;
   onOpenProfile?: (username: string) => void;
 }) {
@@ -38,7 +42,7 @@ function CommentNode({
         id: res.id,
         post_id: comment.post_id,
         author_id: currentUserId,
-        author_username: undefined,
+        author_username: currentUsername,
         content: text,
         parent_id: comment.id,
         created_at: res.created_at,
@@ -51,7 +55,12 @@ function CommentNode({
 
   return (
     <div style={{ display: "flex", gap: 10, padding: "8px 0", marginLeft: comment.parent_id ? 24 : 0 }}>
-      <Avatar username={authorName} size={28} onClick={onOpenProfile ? () => onOpenProfile(authorName) : undefined} />
+      <Avatar
+        username={authorName}
+        size={28}
+        src={comment.author_id === currentUserId ? currentAvatar ?? null : undefined}
+        onClick={onOpenProfile ? () => onOpenProfile(authorName) : undefined}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, lineHeight: 1.45 }}>
           <span
@@ -93,6 +102,8 @@ function CommentNode({
             key={r.id}
             comment={r}
             currentUserId={currentUserId}
+            currentUsername={currentUsername}
+            currentAvatar={currentAvatar}
             onDelete={onDelete}
             onOpenProfile={onOpenProfile}
           />
@@ -105,17 +116,23 @@ function CommentNode({
 export default function PostCard({
   post,
   currentUserId,
+  currentUsername,
+  currentAvatar,
   onDelete,
   onOpenProfile,
 }: {
   post: Post;
   currentUserId: string;
+  currentUsername?: string;
+  currentAvatar?: string | null;
   onDelete?: (id: string) => void;
   onOpenProfile?: (username: string) => void;
 }) {
   const [likes, setLikes] = useState(post.likes);
   const [liked, setLiked] = useState(Boolean(post.liked_by_me));
   const [popping, setPopping] = useState(false);
+  const [likeHover, setLikeHover] = useState(false);
+  const [commentHover, setCommentHover] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
@@ -148,7 +165,7 @@ export default function PostCard({
         id: res.id,
         post_id: post.id,
         author_id: currentUserId,
-        author_username: undefined,
+        author_username: currentUsername,
         content: text,
         parent_id: null,
         created_at: res.created_at,
@@ -162,6 +179,22 @@ export default function PostCard({
   const handleDeleteComment = async (commentId: string) => {
     await deleteComment(commentId);
     setComments((prev) => prev.filter((c) => c.id !== commentId));
+  };
+
+  const heartColor = liked || likeHover ? "var(--ig-danger)" : "var(--ig-text)";
+  const heartGlyph = liked || likeHover ? "♥" : "♡";
+
+  const actionBtnStyle: React.CSSProperties = {
+    border: "1.5px solid #000",
+    borderRadius: 8,
+    padding: "6px 12px",
+    fontSize: 20,
+    background: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "transform 0.15s",
+    cursor: "pointer",
   };
 
   return (
@@ -206,16 +239,33 @@ export default function PostCard({
       )}
 
       <div style={{ padding: "10px 14px 6px" }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center", fontSize: 24, marginBottom: 6 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
           <button
             onClick={handleLike}
+            onMouseEnter={() => setLikeHover(true)}
+            onMouseLeave={() => setLikeHover(false)}
             className={popping ? "ig-heart-pop" : ""}
-            style={{ color: liked ? "var(--ig-danger)" : "var(--ig-text)" }}
+            style={{
+              ...actionBtnStyle,
+              color: heartColor,
+              fontSize: 22,
+              lineHeight: 1,
+            }}
             title="좋아요"
           >
-            {liked ? "❤" : "🤍"}
+            {heartGlyph}
           </button>
-          <button onClick={loadComments} title="댓글" style={{ fontSize: 22 }}>
+          <button
+            onClick={loadComments}
+            onMouseEnter={() => setCommentHover(true)}
+            onMouseLeave={() => setCommentHover(false)}
+            style={{
+              ...actionBtnStyle,
+              fontSize: 18,
+              filter: commentHover ? "brightness(0)" : "none",
+            }}
+            title="댓글"
+          >
             💬
           </button>
         </div>
@@ -261,6 +311,8 @@ export default function PostCard({
                 key={c.id}
                 comment={c}
                 currentUserId={currentUserId}
+                currentUsername={currentUsername ?? ""}
+                currentAvatar={currentAvatar}
                 onDelete={handleDeleteComment}
                 onOpenProfile={onOpenProfile}
               />

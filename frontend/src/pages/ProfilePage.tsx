@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import type { User, Post } from "../api/client";
+import type { User, Post, UserMini } from "../api/client";
 import {
   getProfile,
   updateBio,
@@ -8,6 +8,8 @@ import {
   unfollowUser,
   getMe,
   updateAvatar,
+  getFollowers,
+  getFollowing,
 } from "../api/client";
 import Avatar from "../components/Avatar";
 import PostCard from "../components/PostCard";
@@ -18,11 +20,13 @@ export default function ProfilePage({
   targetUsername,
   currentUsername,
   currentUserId,
+  currentAvatar,
   onOpenProfile,
 }: {
   targetUsername: string;
   currentUsername: string;
   currentUserId: string;
+  currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
 }) {
   const [profile, setProfile] = useState<User | null>(null);
@@ -35,6 +39,8 @@ export default function ProfilePage({
   const [openedPost, setOpenedPost] = useState<Post | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showList, setShowList] = useState<"followers" | "following" | null>(null);
+  const [listItems, setListItems] = useState<UserMini[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const isSelf = currentUsername === targetUsername;
@@ -211,12 +217,26 @@ export default function ProfilePage({
             <span>
               게시물 <b>{profile.post_count}</b>
             </span>
-            <span>
+            <button
+              onClick={async () => {
+                const list = await getFollowers(targetUsername);
+                setListItems(list);
+                setShowList("followers");
+              }}
+              style={{ background: "none", border: "none", padding: 0, fontSize: 16, cursor: "pointer", color: "inherit" }}
+            >
               팔로워 <b>{profile.followers_count}</b>
-            </span>
-            <span>
+            </button>
+            <button
+              onClick={async () => {
+                const list = await getFollowing(targetUsername);
+                setListItems(list);
+                setShowList("following");
+              }}
+              style={{ background: "none", border: "none", padding: 0, fontSize: 16, cursor: "pointer", color: "inherit" }}
+            >
               팔로잉 <b>{profile.following_count}</b>
-            </span>
+            </button>
           </div>
           {editBio ? (
             <textarea
@@ -275,6 +295,8 @@ export default function ProfilePage({
           <PostCard
             post={openedPost}
             currentUserId={currentUserId}
+            currentUsername={currentUsername}
+            currentAvatar={currentAvatar}
             onOpenProfile={onOpenProfile}
           />
         </div>
@@ -325,6 +347,105 @@ export default function ProfilePage({
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {showList && (
+        <div
+          onClick={() => setShowList(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="ig-card"
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              maxHeight: "70vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <header
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid var(--ig-border)",
+                fontWeight: 700,
+                textAlign: "center",
+                position: "relative",
+              }}
+            >
+              {showList === "followers" ? "팔로워" : "팔로잉"}
+              <button
+                onClick={() => setShowList(null)}
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 18,
+                  color: "var(--ig-text-muted)",
+                }}
+              >
+                ✕
+              </button>
+            </header>
+            <div className="ig-scrollbar" style={{ overflowY: "auto", flex: 1 }}>
+              {listItems.length === 0 ? (
+                <p style={{ textAlign: "center", padding: 30, color: "var(--ig-text-muted)" }}>
+                  {showList === "followers" ? "팔로워가 없습니다." : "팔로잉이 없습니다."}
+                </p>
+              ) : (
+                listItems.map((u) => (
+                  <button
+                    key={u.username}
+                    onClick={() => {
+                      setShowList(null);
+                      onOpenProfile?.(u.username);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 16px",
+                      width: "100%",
+                      textAlign: "left",
+                      borderTop: "1px solid var(--ig-border-soft)",
+                    }}
+                  >
+                    <Avatar username={u.username} size={40} src={u.avatar_base64} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{u.username}</div>
+                      {u.bio && (
+                        <div
+                          style={{
+                            color: "var(--ig-text-muted)",
+                            fontSize: 12,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {u.bio}
+                        </div>
+                      )}
+                    </div>
+                    {u.is_ai && <span className="ig-chip ig-chip-tag" style={{ fontSize: 10 }}>AI</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

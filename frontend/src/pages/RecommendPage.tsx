@@ -14,10 +14,12 @@ type Tab = "posts" | "people" | "path";
 export default function RecommendPage({
   username,
   userId,
+  currentAvatar,
   onOpenProfile,
 }: {
   username: string;
   userId: string;
+  currentAvatar?: string | null;
   onOpenProfile?: (username: string) => void;
 }) {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -157,6 +159,8 @@ export default function RecommendPage({
                 key={p.id}
                 post={p}
                 currentUserId={userId}
+                currentUsername={username}
+                currentAvatar={currentAvatar}
                 onOpenProfile={onOpenProfile}
               />
             ))
