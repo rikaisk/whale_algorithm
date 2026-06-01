@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   listConversations,
   getConversation,
@@ -58,6 +58,20 @@ export default function ChatPage({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
   const peerRef = useRef("");
+  // 대화별 스크롤 위치 보존용
+  const pendingRestoreRef = useRef(false); // 대화 첫 로드 시 위치 복원 대기
+  const justRestoredRef = useRef(false); // 복원 직후 1회 자동 스크롤 억제
+  const scrollSaveTimer = useRef<number | null>(null);
+  const scrollKey = (p: string) => `wg_chat_scroll:${username}:${p}`;
+  const saveScroll = () => {
+    const el = scrollRef.current;
+    const p = peerRef.current;
+    if (el && p) {
+      try {
+        localStorage.setItem(scrollKey(p), String(Math.round(el.scrollTop)));
+      } catch {}
+    }
+  };
   const onlineSet = new Set(onlineUsers ?? []);
   const totalUnread = conversations.reduce((s, c) => s + (c.unread ?? 0), 0);
 
@@ -100,9 +114,37 @@ export default function ChatPage({
     refreshConversations();
   }, []);
 
+  // 메시지 탭을 다시 열면 직전에 보고 있던 대화를 복원 (프로필에서 진입한 경우는 그쪽 우선)
+  useEffect(() => {
+    if ((initialPeer || "").trim()) return;
+    try {
+      const last = localStorage.getItem(`wg_chat_last_peer:${username}`);
+      if (last) {
+        setPeer(last);
+        setPeerInput(last);
+      }
+    } catch {}
+    // 마운트 시 1회
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     peerRef.current = peer;
-  }, [peer]);
+    if (peer) {
+      try {
+        localStorage.setItem(`wg_chat_last_peer:${username}`, peer);
+      } catch {}
+    }
+  }, [peer, username]);
+
+  // 언마운트 시 현재 스크롤 위치 저장
+  useEffect(() => {
+    return () => {
+      if (scrollSaveTimer.current) window.clearTimeout(scrollSaveTimer.current);
+      saveScroll();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // App의 전역 WebSocket이 전달한 수신 메시지 처리
   useEffect(() => {
@@ -135,19 +177,46 @@ export default function ChatPage({
       setMessages([]);
       return;
     }
+    // 이 대화의 첫 로드 → 직전에 보던 위치로 복원 예정(맨 아래로 강제하지 않음)
+    pendingRestoreRef.current = true;
     getConversation(peer)
       .then((msgs) => {
         setMessages(msgs);
         refreshConversations();
-        // 대화를 열면 맨 아래로 한 번 이동(읽음 처리는 입력칸 포커스 시)
-        setTimeout(() => scrollToBottom(false), 0);
       })
       .catch(() => setMessages([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peer]);
 
+  // 대화 첫 로드 후, 저장된 스크롤 위치 복원 (없으면 맨 아래)
+  useLayoutEffect(() => {
+    if (!pendingRestoreRef.current) return;
+    if (messages.length === 0) return;
+    pendingRestoreRef.current = false;
+    justRestoredRef.current = true;
+    const el = scrollRef.current;
+    if (!el) return;
+    let saved = NaN;
+    try {
+      const raw = localStorage.getItem(scrollKey(peer));
+      if (raw != null) saved = Number(raw);
+    } catch {}
+    if (Number.isFinite(saved) && saved > 0) {
+      el.scrollTop = saved;
+      setShowScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > 80);
+    } else {
+      scrollToBottom(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, peer]);
+
   // 새 메시지: 내가 보낸 건 자동으로 내려가고, 상대가 보낸 건 ↓ 버튼만 표시
   useEffect(() => {
+    // 위치 복원 직후 1회는 자동 스크롤하지 않음(보존 위치 유지)
+    if (justRestoredRef.current) {
+      justRestoredRef.current = false;
+      return;
+    }
     const last = messages[messages.length - 1];
     if (!last) return;
     if (last.sender_id === userId) {
@@ -553,6 +622,9 @@ export default function ChatPage({
               onScroll={(e) => {
                 const el = e.currentTarget;
                 if (el.scrollHeight - el.scrollTop - el.clientHeight < 60) setShowScrollDown(false);
+                // 현재 보고 있는 위치를 대화별로 저장(디바운스)
+                if (scrollSaveTimer.current) window.clearTimeout(scrollSaveTimer.current);
+                scrollSaveTimer.current = window.setTimeout(saveScroll, 200);
               }}
               className="ig-scrollbar"
               style={{

@@ -23,7 +23,14 @@ def _username_of(user_id: str) -> str:
     return "unknown"
 
 
-async def _notify_interaction(target_user_id: str, actor_id: str, kind: str, content: str, post_id: str | None) -> None:
+async def _notify_interaction(
+    target_user_id: str,
+    actor_id: str,
+    kind: str,
+    content: str,
+    post_id: str | None,
+    comment_id: str | None = None,
+) -> None:
     if not target_user_id or target_user_id == actor_id:
         return
     await push_notification(target_user_id, {
@@ -31,16 +38,22 @@ async def _notify_interaction(target_user_id: str, actor_id: str, kind: str, con
         "from_username": _username_of(actor_id),
         "content": content[:120],
         "post_id": post_id,
+        "comment_id": comment_id,
         "created_at": time.time(),
     })
 
 
-async def _notify_mentions(content: str, actor_id: str, post_id: str | None) -> None:
+async def _notify_mentions(
+    content: str,
+    actor_id: str,
+    post_id: str | None,
+    comment_id: str | None = None,
+) -> None:
     for name in extract_mentions(content):
         if not user_store.exists(name):
             continue
         target = user_store.get(name)
-        await _notify_interaction(target.id, actor_id, "mention", content, post_id)
+        await _notify_interaction(target.id, actor_id, "mention", content, post_id, comment_id)
 
 
 def _get_comment_tree(comment_id: str, id_to_name: dict[str, str], current_user_id: str | None = None) -> dict | None:
@@ -103,9 +116,9 @@ async def create_comment(
     post.comment_ids.append(comment.id)
     post_store.set(post_id, post)
 
-    # 게시물 작성자에게 댓글 알림 + 멘션 알림
-    await _notify_interaction(post.author_id, user_id, "comment", req.content, post_id)
-    await _notify_mentions(req.content, user_id, post_id)
+    # 게시물 작성자에게 댓글 알림 + 멘션 알림 (근원지=이 댓글)
+    await _notify_interaction(post.author_id, user_id, "comment", req.content, post_id, comment.id)
+    await _notify_mentions(req.content, user_id, post_id, comment.id)
     return {"id": comment.id, "created_at": comment.created_at}
 
 
@@ -134,9 +147,9 @@ async def create_reply(
     parent.children.append(reply.id)
     comment_store.set(comment_id, parent)
 
-    # 부모 댓글 작성자에게 답글 알림 + 멘션 알림
-    await _notify_interaction(parent.author_id, user_id, "reply", req.content, parent.post_id)
-    await _notify_mentions(req.content, user_id, parent.post_id)
+    # 부모 댓글 작성자에게 답글 알림 + 멘션 알림 (근원지=이 답글)
+    await _notify_interaction(parent.author_id, user_id, "reply", req.content, parent.post_id, reply.id)
+    await _notify_mentions(req.content, user_id, parent.post_id, reply.id)
     return {"id": reply.id, "parent_id": comment_id, "created_at": reply.created_at}
 
 

@@ -99,6 +99,7 @@ async def create_post(
                     "from_username": author.username,
                     "content": req.content[:120],
                     "post_id": post.id,
+                    "comment_id": None,
                     "created_at": time.time(),
                 })
 
@@ -165,6 +166,20 @@ def like_post(
         liked = True
     post_store.set(post_id, post)
     return {"post_id": post_id, "likes": post.likes, "liked_by_me": liked}
+
+
+@router.get("/posts/{post_id}")
+def get_post(
+    post_id: str,
+    current_user_id: str | None = Depends(auth.get_current_user_optional),
+):
+    """단일 게시물 조회 (알림 클릭 → 근원지 이동에 사용)."""
+    if not post_store.exists(post_id):
+        raise HTTPException(status_code=404, detail="Post not found")
+    post = post_store.get(post_id)
+    id_to_name = {u.id: u.username for u in user_store.values()}
+    id_to_ai = {u.id: u.is_ai for u in user_store.values()}
+    return _serialize_post(post, id_to_name, current_user_id, id_to_ai)
 
 
 @router.get("/posts/{post_id}/likers")

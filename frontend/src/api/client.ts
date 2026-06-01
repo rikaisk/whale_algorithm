@@ -170,6 +170,9 @@ export const likePost = (
 export const getFeed = (username: string): Promise<Post[]> =>
   api.get(`/feed/${username}`).then((r) => r.data);
 
+export const getPost = (post_id: string): Promise<Post> =>
+  api.get(`/posts/${post_id}`).then((r) => r.data);
+
 export const getPostLikers = (post_id: string): Promise<UserMini[]> =>
   api.get(`/posts/${post_id}/likers`).then((r) => r.data);
 

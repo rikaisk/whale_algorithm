@@ -33,13 +33,13 @@ html, body {
   overflow-x: clip;
 }
 
-/* 알림 토스트: 위에서 아래로 드롭 */
-@keyframes wg-drop {
-  from { transform: translateY(-120%); opacity: 0; }
+/* 알림 토스트: 아래에서 위로 떠오름 */
+@keyframes wg-rise {
+  from { transform: translateY(120%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 .wg-toast {
-  animation: wg-drop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: wg-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {

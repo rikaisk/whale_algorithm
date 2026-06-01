@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Post, Comment, UserMini } from "../api/client";
 import {
   likePost,
@@ -99,6 +99,7 @@ function CommentNode({
   onDelete,
   onChanged,
   onOpenProfile,
+  highlightCommentId,
 }: {
   comment: Comment;
   currentUserId: string;
@@ -107,6 +108,7 @@ function CommentNode({
   onDelete: (id: string) => void;
   onChanged?: () => void;
   onOpenProfile?: (username: string) => void;
+  highlightCommentId?: string | null;
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReply, setShowReply] = useState(false);
@@ -114,6 +116,24 @@ function CommentNode({
   const [liked, setLiked] = useState(Boolean(comment.liked_by_me));
   const authorName = comment.author_username ?? comment.author_id.slice(0, 8);
   const replies = comment.replies ?? [];
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const [flash, setFlash] = useState(false);
+
+  // 알림으로 진입한 '근원 댓글'이면 스크롤 + 잠깐 강조
+  useEffect(() => {
+    if (highlightCommentId && comment.id === highlightCommentId) {
+      setFlash(true);
+      const t1 = window.setTimeout(
+        () => rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+        120,
+      );
+      const t2 = window.setTimeout(() => setFlash(false), 2400);
+      return () => {
+        window.clearTimeout(t1);
+        window.clearTimeout(t2);
+      };
+    }
+  }, [highlightCommentId, comment.id]);
 
   const toggleLike = async () => {
     try {
@@ -135,7 +155,18 @@ function CommentNode({
   };
 
   return (
-    <div style={{ display: "flex", gap: 10, padding: "8px 0", marginLeft: comment.parent_id ? 12 : 0 }}>
+    <div
+      ref={rowRef}
+      style={{
+        display: "flex",
+        gap: 10,
+        padding: "8px 6px",
+        marginLeft: comment.parent_id ? 12 : 0,
+        background: flash ? "rgba(0,149,246,0.12)" : "transparent",
+        borderRadius: 8,
+        transition: "background 0.6s ease",
+      }}
+    >
       <Avatar
         username={authorName}
         size={28}
@@ -213,6 +244,7 @@ function CommentNode({
             onDelete={onDelete}
             onChanged={onChanged}
             onOpenProfile={onOpenProfile}
+            highlightCommentId={highlightCommentId}
           />
         ))}
       </div>
@@ -228,6 +260,8 @@ export default function PostCard({
   onDelete,
   onOpenProfile,
   highlight,
+  defaultShowComments,
+  highlightCommentId,
 }: {
   post: Post;
   currentUserId: string;
@@ -236,13 +270,15 @@ export default function PostCard({
   onDelete?: (id: string) => void;
   onOpenProfile?: (username: string) => void;
   highlight?: string;
+  defaultShowComments?: boolean;
+  highlightCommentId?: string | null;
 }) {
   const [likes, setLikes] = useState(post.likes);
   const [liked, setLiked] = useState(Boolean(post.liked_by_me));
   const [popping, setPopping] = useState(false);
   const [likeHover, setLikeHover] = useState(false);
   const [commentHover, setCommentHover] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showComments, setShowComments] = useState(Boolean(defaultShowComments));
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [imgError, setImgError] = useState(false);
@@ -273,6 +309,12 @@ export default function PostCard({
     }
     setShowComments(!showComments);
   };
+
+  // 알림 등으로 처음부터 댓글을 펼쳐 보여줘야 하면 즉시 로드
+  useEffect(() => {
+    if (defaultShowComments) refreshComments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 댓글이 펼쳐져 있는 동안 이벤트 없이도 실시간(폴링) 갱신
   useEffect(() => {
@@ -483,6 +525,7 @@ export default function PostCard({
                 onDelete={handleDeleteComment}
                 onChanged={refreshComments}
                 onOpenProfile={onOpenProfile}
+                highlightCommentId={highlightCommentId}
               />
             ))}
           </div>

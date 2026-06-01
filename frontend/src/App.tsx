@@ -30,14 +30,15 @@ import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
 import RecommendPage from "./pages/RecommendPage";
 import ChatPage from "./pages/ChatPage";
+import PostFocusModal from "./components/PostFocusModal";
 
 type Tab = "feed" | "search" | "recommend" | "chat" | "profile";
 
 const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "feed", label: "피드", icon: "🏠" },
   { id: "search", label: "검색", icon: "🔍" },
-  { id: "recommend", label: "추천", icon: "✨" },
   { id: "chat", label: "메시지", icon: "✈" },
+  { id: "recommend", label: "추천", icon: "✨" },
   { id: "profile", label: "프로필", icon: "👤" },
 ];
 
@@ -60,6 +61,7 @@ export default function App() {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [notifSettings, setNotifSettings] = useState<NotifSettings>(() => loadNotifSettings());
   const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const [focusPost, setFocusPost] = useState<{ postId: string; commentId: string | null } | null>(null);
   const { toasts, push: pushToast, close: closeToast } = useToasts();
   const notifSettingsRef = useRef<NotifSettings>(notifSettings);
   const [loading, setLoading] = useState(false);
@@ -169,8 +171,10 @@ export default function App() {
       } catch {
         return;
       }
-      // 알림(상호작용) 메시지는 우상단 토스트로
+      // 알림(상호작용) 메시지는 우하단 토스트로
       if (data.type === "notification") {
+        // '모두 끄기'면 알림을 표시하지도, 소리내지도 않음
+        if (notifSettingsRef.current.masterOff) return;
         const kind = (data.kind || "comment") as NotifKind;
         nonceRef.current += 1;
         const toast = {
@@ -179,9 +183,10 @@ export default function App() {
           from_username: data.from_username ?? "",
           content: data.content ?? "",
           post_id: data.post_id ?? null,
+          comment_id: data.comment_id ?? null,
           created_at: data.created_at ?? 0,
         };
-        pushToast(toast);
+        pushToast(toast, Math.max(1, notifSettingsRef.current.durationSec) * 1000);
         playNotifSound(kind, notifSettingsRef.current);
         return;
       }
@@ -721,9 +726,25 @@ export default function App() {
         onClose={closeToast}
         onOpen={(t) => {
           closeToast(t.id);
-          if (t.from_username) openProfile(t.from_username);
+          // 알림의 근원지(게시물/해당 댓글)로 이동. 게시물 정보가 없으면 프로필로 폴백
+          if (t.post_id) {
+            setFocusPost({ postId: t.post_id, commentId: t.comment_id ?? null });
+          } else if (t.from_username) {
+            openProfile(t.from_username);
+          }
         }}
       />
+      {focusPost && (
+        <PostFocusModal
+          postId={focusPost.postId}
+          commentId={focusPost.commentId}
+          currentUserId={userId}
+          currentUsername={username}
+          currentAvatar={myAvatar}
+          onOpenProfile={openProfile}
+          onClose={() => setFocusPost(null)}
+        />
+      )}
       {showNotifSettings && (
         <NotifSettingsPanel
           settings={notifSettings}

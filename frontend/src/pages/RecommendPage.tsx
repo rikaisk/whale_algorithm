@@ -48,7 +48,7 @@ export default function RecommendPage({
   const [followed, setFollowed] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [loadedTabs, setLoadedTabs] = useState<Set<Tab>>(new Set());
-  const [activeTab, setActiveTab] = useState<Tab>("posts");
+  const [activeTab, setActiveTab] = useState<Tab>("people");
   const isMobile = useIsMobile();
 
   const loadPosts = async () => {
@@ -208,8 +208,8 @@ export default function RecommendPage({
           overflowX: "auto",
         }}
       >
+        {tabBtn("people", "👥 친구")}
         {tabBtn("posts", "✨ 게시물")}
-        {tabBtn("people", "👥 사람")}
         {tabBtn("closest", "🧭 가까운 친구")}
       </div>
 
