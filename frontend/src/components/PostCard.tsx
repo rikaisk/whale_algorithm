@@ -7,6 +7,7 @@ import {
   createReply,
   deleteComment,
   getPostLikers,
+  likeComment,
 } from "../api/client";
 import Avatar from "./Avatar";
 
@@ -33,6 +34,52 @@ function highlightText(text: string, query?: string): React.ReactNode {
     i = idx + q.length;
   }
   return parts;
+}
+
+// @멘션을 프로필 링크로, 검색어는 볼드로 렌더링
+const MENTION_RE = /@([\p{L}\p{N}_]{2,20})/gu;
+
+function renderContent(
+  text: string,
+  onOpenProfile?: (u: string) => void,
+  query?: string,
+): React.ReactNode {
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  MENTION_RE.lastIndex = 0;
+  while ((m = MENTION_RE.exec(text)) !== null) {
+    if (m.index > last) {
+      nodes.push(<span key={key++}>{highlightText(text.slice(last, m.index), query)}</span>);
+    }
+    const uname = m[1];
+    nodes.push(
+      <span
+        key={key++}
+        onClick={
+          onOpenProfile
+            ? (e) => {
+                e.stopPropagation();
+                onOpenProfile(uname);
+              }
+            : undefined
+        }
+        style={{
+          color: "var(--ig-accent)",
+          fontWeight: 600,
+          cursor: onOpenProfile ? "pointer" : "default",
+        }}
+      >
+        @{uname}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    nodes.push(<span key={key++}>{highlightText(text.slice(last), query)}</span>);
+  }
+  return nodes;
 }
 
 function relativeTime(ts: number): string {
@@ -63,8 +110,20 @@ function CommentNode({
 }) {
   const [replyText, setReplyText] = useState("");
   const [showReply, setShowReply] = useState(false);
+  const [likes, setLikes] = useState(comment.likes ?? 0);
+  const [liked, setLiked] = useState(Boolean(comment.liked_by_me));
   const authorName = comment.author_username ?? comment.author_id.slice(0, 8);
   const replies = comment.replies ?? [];
+
+  const toggleLike = async () => {
+    try {
+      const res = await likeComment(comment.id);
+      setLikes(res.likes);
+      setLiked(res.liked_by_me);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const submitReply = async () => {
     const text = replyText.trim();
@@ -91,10 +150,16 @@ function CommentNode({
           >
             {authorName}
           </span>{" "}
-          <span style={{ color: "var(--ig-text)" }}>{comment.content}</span>
+          <span style={{ color: "var(--ig-text)" }}>{renderContent(comment.content, onOpenProfile)}</span>
         </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--ig-text-muted)" }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 4, fontSize: 12, color: "var(--ig-text-muted)", alignItems: "center" }}>
           <span>{relativeTime(comment.created_at)}</span>
+          <button
+            onClick={toggleLike}
+            style={{ fontWeight: 600, color: liked ? "var(--ig-danger)" : "var(--ig-text-muted)", fontSize: 12 }}
+          >
+            {liked ? "♥" : "♡"}{likes > 0 ? ` ${likes}` : ""}
+          </button>
           <button onClick={() => setShowReply(!showReply)} style={{ fontWeight: 600, color: "var(--ig-text-muted)", fontSize: 12 }}>
             답글 달기
           </button>
@@ -275,9 +340,32 @@ export default function PostCard({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             onClick={onOpenProfile ? () => onOpenProfile(authorName) : undefined}
-            style={{ fontWeight: 600, fontSize: 14, cursor: onOpenProfile ? "pointer" : "default" }}
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: onOpenProfile ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+            }}
           >
             {authorName}
+            {post.author_is_ai && (
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: 0.5,
+                  color: "#fff",
+                  background: "linear-gradient(135deg,#4f5bd5,#962fbf)",
+                  borderRadius: 4,
+                  padding: "1px 4px",
+                  textTransform: "uppercase",
+                }}
+              >
+                ai
+              </span>
+            )}
           </div>
         </div>
         {isMine && onDelete && (
@@ -358,7 +446,7 @@ export default function PostCard({
           >
             {authorName}
           </span>
-          {highlightText(post.content, highlight)}
+          {renderContent(post.content, onOpenProfile, highlight)}
         </div>
         {post.hashtags.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>

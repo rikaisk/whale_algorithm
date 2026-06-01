@@ -69,6 +69,17 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+def online_user_ids() -> set[str]:
+    """현재 WebSocket 연결된(접속 중) 유저 id 집합."""
+    return set(manager.active.keys())
+
+
+async def push_notification(user_id: str, payload: dict) -> None:
+    """상호작용 알림을 해당 유저에게 실시간 전달(접속 중이면)."""
+    payload = {"type": "notification", **payload}
+    await manager.send_to(user_id, payload)
+
+
 def _username_to_id(username: str) -> str | None:
     if not user_store.exists(username):
         return None
@@ -201,26 +212,23 @@ def get_conversation(
     if peer_id is None:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # 단순 열람으로는 읽음 처리하지 않음(읽음 기준 = 입력칸 포커스 → /read 호출)
     conversation = []
-    changed = False
     for msg in message_store.values():
         if (msg.sender_id == user_id and msg.receiver_id == peer_id) or \
            (msg.sender_id == peer_id and msg.receiver_id == user_id):
-            # 상대가 보낸 메시지를 열람 → 읽음 처리
-            if msg.sender_id == peer_id and msg.receiver_id == user_id and not msg.read:
-                msg.read = True
-                message_store.set(msg.id, msg)
-                changed = True
             conversation.append(asdict(msg))
-
-    if changed:
-        try:
-            persistence.save_all()
-        except Exception:
-            pass
 
     conversation.sort(key=lambda m: m["created_at"])
     return conversation
+
+
+@router.get("/presence/online")
+def presence_online():
+    """접속 중인 유저명 목록."""
+    online = online_user_ids()
+    names = [u.username for u in user_store.values() if u.id in online]
+    return {"usernames": names}
 
 
 @router.post("/messages/{peer_username}/read")

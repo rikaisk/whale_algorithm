@@ -29,7 +29,17 @@
 html, body {
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
+  /* overflow-x:hidden 은 sticky 헤더를 깨뜨리므로 clip 사용 (스크롤 컨테이너를 만들지 않음) */
+  overflow-x: clip;
+}
+
+/* 알림 토스트: 위에서 아래로 드롭 */
+@keyframes wg-drop {
+  from { transform: translateY(-120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.wg-toast {
+  animation: wg-drop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {

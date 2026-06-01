@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   listConversations,
   getConversation,
+  markConversationRead,
   userExists,
   searchUsers,
   type ConversationSummary,
@@ -27,7 +28,8 @@ export default function ChatPage({
   onConversationRead,
   incoming,
   wsSend,
-  onActivePeer,
+  onReadingPeer,
+  onlineUsers,
 }: {
   username: string;
   userId: string;
@@ -37,7 +39,8 @@ export default function ChatPage({
   onConversationRead?: () => void;
   incoming?: { data: any; nonce: number } | null;
   wsSend?: (payload: any) => void;
-  onActivePeer?: (peer: string) => void;
+  onReadingPeer?: (peer: string) => void;
+  onlineUsers?: string[];
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [peer, setPeer] = useState<string>("");
@@ -48,10 +51,31 @@ export default function ChatPage({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [collapsed, setCollapsed] = useState(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const isMobile = useIsMobile();
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
   const peerRef = useRef("");
+  const onlineSet = new Set(onlineUsers ?? []);
+  const totalUnread = conversations.reduce((s, c) => s + (c.unread ?? 0), 0);
+
+  const scrollToBottom = (smooth = true) => {
+    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    setShowScrollDown(false);
+  };
+
+  const markRead = () => {
+    if (!peer) return;
+    onReadingPeer?.(peer);
+    markConversationRead(peer)
+      .then(() => {
+        onConversationRead?.();
+        refreshConversations();
+      })
+      .catch(() => {});
+  };
 
   // 프로필의 '메시지 보내기'로 진입 시 해당 유저와 바로 대화 시작
   useEffect(() => {
@@ -76,11 +100,8 @@ export default function ChatPage({
     refreshConversations();
   }, []);
 
-  // 현재 열려있는 대화 상대를 App에 알림(전역 ws가 읽음/배지 판단에 사용)
   useEffect(() => {
     peerRef.current = peer;
-    onActivePeer?.(peer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peer]);
 
   // App의 전역 WebSocket이 전달한 수신 메시지 처리
@@ -117,16 +138,27 @@ export default function ChatPage({
     getConversation(peer)
       .then((msgs) => {
         setMessages(msgs);
-        // 대화를 열면 서버에서 읽음 처리됨 → 총 배지 + 좌측 목록 갱신
-        onConversationRead?.();
         refreshConversations();
+        // 대화를 열면 맨 아래로 한 번 이동(읽음 처리는 입력칸 포커스 시)
+        setTimeout(() => scrollToBottom(false), 0);
       })
       .catch(() => setMessages([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peer]);
 
+  // 새 메시지: 내가 보낸 건 자동으로 내려가고, 상대가 보낸 건 ↓ 버튼만 표시
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    if (last.sender_id === userId) {
+      scrollToBottom();
+    } else {
+      const el = scrollRef.current;
+      const nearBottom = el ? el.scrollHeight - el.scrollTop - el.clientHeight < 80 : true;
+      if (nearBottom) scrollToBottom();
+      else setShowScrollDown(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
 
   // Autocomplete (debounced)
@@ -189,7 +221,7 @@ export default function ChatPage({
       className="ig-card"
       style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "320px 1fr",
+        gridTemplateColumns: isMobile ? "1fr" : collapsed ? "76px 1fr" : "320px 1fr",
         height: isMobile ? "calc(100vh - 92px)" : "calc(100vh - 140px)",
         minHeight: isMobile ? 360 : 500,
         maxHeight: isMobile ? "none" : 800,
@@ -200,9 +232,43 @@ export default function ChatPage({
     >
       {(!isMobile || !peer) && (
       <aside style={{ borderRight: isMobile ? "none" : "1px solid var(--ig-border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <header style={{ padding: 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 8 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>{username}</h3>
+        <header style={{ padding: collapsed ? "12px 6px" : 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 6, justifyContent: collapsed ? "center" : "flex-start" }}>
+          {!collapsed && (
+            <>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>메시지</h3>
+              {totalUnread > 0 && (
+                <span
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 9,
+                    background: "#ed4956",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                  }}
+                  title="읽지 않은 메시지"
+                >
+                  {totalUnread > 99 ? "99+" : totalUnread}
+                </span>
+              )}
+              <span style={{ flex: 1 }} />
+            </>
+          )}
+          {!isMobile && (
+            <button
+              onClick={() => setCollapsed((c) => !c)}
+              title={collapsed ? "펼치기" : "접기"}
+              style={{ fontSize: 20, color: "var(--ig-text-muted)", padding: "2px 6px", lineHeight: 1 }}
+            >
+              {collapsed ? "›" : "‹"}
+            </button>
+          )}
         </header>
+        {!collapsed && (
         <div style={{ padding: 12, position: "relative" }}>
           <div style={{ display: "flex", gap: 6 }}>
             <input
@@ -298,11 +364,49 @@ export default function ChatPage({
             </p>
           )}
         </div>
+        )}
         <div className="ig-scrollbar" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
           {conversations.length === 0 ? (
-            <p style={{ padding: 16, color: "var(--ig-text-muted)", fontSize: 13, textAlign: "center" }}>
-              아직 대화가 없습니다.
-            </p>
+            !collapsed && (
+              <p style={{ padding: 16, color: "var(--ig-text-muted)", fontSize: 13, textAlign: "center" }}>
+                아직 대화가 없습니다.
+              </p>
+            )
+          ) : collapsed ? (
+            conversations.map((c) => {
+              const active = peer === c.peer_username;
+              return (
+                <button
+                  key={c.peer_id}
+                  onClick={() => {
+                    setPeer(c.peer_username);
+                    setPeerInput(c.peer_username);
+                    setError("");
+                  }}
+                  title={c.peer_username}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    justifyContent: "center",
+                    padding: "8px 0",
+                    background: active ? "#fafafa" : "transparent",
+                    position: "relative",
+                  }}
+                >
+                  <span style={{ position: "relative", display: "inline-flex" }}>
+                    <Avatar username={c.peer_username} size={40} />
+                    {onlineSet.has(c.peer_username) && (
+                      <span style={{ position: "absolute", right: -1, bottom: -1, width: 11, height: 11, borderRadius: "50%", background: "#31a24c", border: "2px solid #fff" }} />
+                    )}
+                    {(c.unread ?? 0) > 0 && (
+                      <span style={{ position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 8, background: "#ed4956", color: "#fff", fontSize: 10, fontWeight: 700, lineHeight: "16px", textAlign: "center" }}>
+                        {(c.unread ?? 0) > 99 ? "99+" : c.unread}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })
           ) : (
             conversations.map((c) => {
               const active = peer === c.peer_username;
@@ -324,10 +428,18 @@ export default function ChatPage({
                     textAlign: "left",
                   }}
                 >
-                  <Avatar username={c.peer_username} size={44} />
+                  <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+                    <Avatar username={c.peer_username} size={44} />
+                    {onlineSet.has(c.peer_username) && (
+                      <span style={{ position: "absolute", right: 0, bottom: 0, width: 12, height: 12, borderRadius: "50%", background: "#31a24c", border: "2px solid #fff" }} />
+                    )}
+                  </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: (c.unread ?? 0) > 0 ? 700 : 600, fontSize: 14 }}>
+                    <div style={{ fontWeight: (c.unread ?? 0) > 0 ? 700 : 600, fontSize: 14, display: "flex", alignItems: "center", gap: 5 }}>
                       {c.peer_username}
+                      {onlineSet.has(c.peer_username) && (
+                        <span style={{ fontSize: 10, color: "#31a24c", fontWeight: 600 }}>접속 중</span>
+                      )}
                     </div>
                     <div
                       style={{
@@ -423,10 +535,25 @@ export default function ChatPage({
                   ‹
                 </button>
               )}
-              <Avatar username={peer} size={36} />
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{peer}</div>
+              <span style={{ position: "relative", display: "inline-flex" }}>
+                <Avatar username={peer} size={36} />
+                {onlineSet.has(peer) && (
+                  <span style={{ position: "absolute", right: 0, bottom: 0, width: 11, height: 11, borderRadius: "50%", background: "#31a24c", border: "2px solid #fff" }} />
+                )}
+              </span>
+              <div style={{ fontWeight: 600, fontSize: 15, display: "flex", alignItems: "center", gap: 6 }}>
+                {peer}
+                {onlineSet.has(peer) && (
+                  <span style={{ fontSize: 11, color: "#31a24c", fontWeight: 600 }}>접속 중 🟢</span>
+                )}
+              </div>
             </header>
             <div
+              ref={scrollRef}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 60) setShowScrollDown(false);
+              }}
               className="ig-scrollbar"
               style={{
                 flex: 1,
@@ -510,7 +637,33 @@ export default function ChatPage({
               })}
               <div ref={bottomRef} />
             </div>
-            <div style={{ padding: 12, borderTop: "1px solid var(--ig-border)" }}>
+            <div style={{ padding: 12, borderTop: "1px solid var(--ig-border)", position: "relative" }}>
+              {showScrollDown && (
+                <button
+                  onClick={() => scrollToBottom()}
+                  title="맨 아래로"
+                  style={{
+                    position: "absolute",
+                    top: -44,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    background: "var(--ig-accent)",
+                    color: "#fff",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 5,
+                  }}
+                >
+                  ↓
+                </button>
+              )}
               <div
                 style={{
                   display: "flex",
@@ -525,6 +678,8 @@ export default function ChatPage({
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && send()}
+                  onFocus={markRead}
+                  onBlur={() => onReadingPeer?.("")}
                   placeholder="메시지 입력..."
                   style={{
                     flex: 1,

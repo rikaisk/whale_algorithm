@@ -12,11 +12,19 @@ def _id_to_username_map() -> dict[str, str]:
     return {u.id: u.username for u in user_store.values()}
 
 
+def _author_is_ai(author_id: str) -> bool:
+    for u in user_store.values():
+        if u.id == author_id:
+            return u.is_ai
+    return False
+
+
 def _serialize(post, id_to_name, current_user_id, extra=None):
     base = {
         "id": post.id,
         "author_id": post.author_id,
         "author_username": id_to_name.get(post.author_id, "unknown"),
+        "author_is_ai": _author_is_ai(post.author_id),
         "content": post.content,
         "hashtags": post.hashtags,
         "likes": post.likes,

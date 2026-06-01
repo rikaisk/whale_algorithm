@@ -181,6 +181,11 @@ export default function ProfilePage({
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
             <h2 style={{ margin: 0, fontWeight: 300, fontSize: isMobile ? 20 : 28, wordBreak: "break-all" }}>{profile.username}</h2>
+            {profile.online && (
+              <span style={{ fontSize: 13, color: "#31a24c", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                접속 중 🟢
+              </span>
+            )}
             {profile.is_ai && (
               <span
                 className="ig-chip"
@@ -354,7 +359,7 @@ export default function ProfilePage({
                   style={{
                     fontSize: 12,
                     color: "var(--ig-text)",
-                    textAlign: "left",
+                    textAlign: "center",
                     width: "100%",
                     overflow: "hidden",
                     display: "-webkit-box",

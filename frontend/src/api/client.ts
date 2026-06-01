@@ -28,6 +28,7 @@ export interface User {
   interests: string[];
   avatar_base64?: string | null;
   is_ai?: boolean;
+  online?: boolean;
   following_count: number;
   followers_count: number;
   post_count: number;
@@ -38,6 +39,7 @@ export interface Post {
   id: string;
   author_id: string;
   author_username?: string;
+  author_is_ai?: boolean;
   content: string;
   hashtags: string[];
   likes: number;
@@ -56,6 +58,8 @@ export interface Comment {
   content: string;
   parent_id: string | null;
   created_at: number;
+  likes?: number;
+  liked_by_me?: boolean;
   replies: Comment[];
 }
 
@@ -221,6 +225,11 @@ export const createComment = (post_id: string, content: string) =>
 export const createReply = (comment_id: string, content: string) =>
   api.post(`/comments/${comment_id}/replies`, { content }).then((r) => r.data);
 
+export const likeComment = (
+  comment_id: string,
+): Promise<{ comment_id: string; likes: number; liked_by_me: boolean }> =>
+  api.post(`/comments/${comment_id}/like`).then((r) => r.data);
+
 export const deleteComment = (comment_id: string) =>
   api.delete(`/comments/${comment_id}`);
 
@@ -239,6 +248,9 @@ export const getUnreadCount = (): Promise<{ unread: number }> =>
 
 export const markConversationRead = (peer_username: string): Promise<{ read: number }> =>
   api.post(`/messages/${peer_username}/read`).then((r) => r.data);
+
+export const getOnlineUsers = (): Promise<{ usernames: string[] }> =>
+  api.get("/presence/online").then((r) => r.data);
 
 // 서버에 보관되는 개인 데이터 (검색 기록 / 가이드봇 대화)
 export const fetchSearchHistory = (): Promise<any[]> =>

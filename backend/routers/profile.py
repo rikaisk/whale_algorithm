@@ -66,6 +66,7 @@ async def register(req: RegisterRequest):
 @router.get("/{username}")
 def get_profile(username: str):
     user = _get_user(username)
+    from routers.messages import online_user_ids
     return {
         "id": user.id,
         "username": user.username,
@@ -73,6 +74,7 @@ def get_profile(username: str):
         "interests": user.interests,
         "avatar_base64": user.avatar_base64,
         "is_ai": user.is_ai,
+        "online": user.id in online_user_ids(),
         "following_count": len(user.following),
         "followers_count": len(user.followers),
         "post_count": len(user.post_ids),
@@ -95,6 +97,7 @@ def get_user_posts(
             "id": post.id,
             "author_id": post.author_id,
             "author_username": user.username,
+            "author_is_ai": user.is_ai,
             "content": post.content,
             "hashtags": post.hashtags,
             "likes": post.likes,

@@ -10,6 +10,8 @@ from core.store import (
 )
 from core.models import Post
 from core import auth
+from core.mentions import extract_mentions
+from routers.messages import push_notification
 import core.solar as solar
 
 router = APIRouter(tags=["posts"])
@@ -22,11 +24,17 @@ class CreatePostRequest(BaseModel):
     image_base64: Optional[str] = None
 
 
-def _serialize_post(post: Post, id_to_name: dict[str, str], current_user_id: str | None = None) -> dict:
+def _serialize_post(
+    post: Post,
+    id_to_name: dict[str, str],
+    current_user_id: str | None = None,
+    id_to_ai: dict[str, bool] | None = None,
+) -> dict:
     return {
         "id": post.id,
         "author_id": post.author_id,
         "author_username": id_to_name.get(post.author_id, "unknown"),
+        "author_is_ai": bool(id_to_ai and id_to_ai.get(post.author_id)),
         "content": post.content,
         "hashtags": post.hashtags,
         "likes": post.likes,
@@ -80,6 +88,19 @@ async def create_post(
 
     for tag in hashtags:
         tag_index.setdefault(tag, set()).add(post.id)
+
+    # @멘션된 실제 유저에게 알림
+    for name in extract_mentions(req.content):
+        if user_store.exists(name):
+            target = user_store.get(name)
+            if target.id != author.id:
+                await push_notification(target.id, {
+                    "kind": "mention",
+                    "from_username": author.username,
+                    "content": req.content[:120],
+                    "post_id": post.id,
+                    "created_at": time.time(),
+                })
 
     return {"id": post.id, "hashtags": hashtags, "created_at": post.created_at}
 
@@ -178,6 +199,7 @@ def get_feed(
     relevant_author_ids = set(user.following) | {user.id}
     all_posts = feed_tree.inorder()
     id_to_name = {u.id: u.username for u in user_store.values()}
+    id_to_ai = {u.id: u.is_ai for u in user_store.values()}
 
     feed = []
     for _, post_id in reversed(all_posts):
@@ -185,5 +207,5 @@ def get_feed(
             continue
         post = post_store.get(post_id)
         if post.author_id in relevant_author_ids:
-            feed.append(_serialize_post(post, id_to_name, current_user_id))
+            feed.append(_serialize_post(post, id_to_name, current_user_id, id_to_ai))
     return feed

@@ -42,6 +42,8 @@ class Comment:
     parent_id: Optional[str] = None
     children: list[str] = field(default_factory=list)
     created_at: float = 0.0
+    likes: int = 0
+    liked_by: list[str] = field(default_factory=list)
 
 
 @dataclass

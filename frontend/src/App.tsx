@@ -10,11 +10,21 @@ import {
   getUnreadCount,
   markConversationRead,
   openMessageSocket,
+  getOnlineUsers,
   userExists,
   type InterestCategory,
 } from "./api/client";
 import Avatar from "./components/Avatar";
 import { useIsMobile } from "./hooks/useIsMobile";
+import {
+  useToasts,
+  NotificationStack,
+  NotifSettingsPanel,
+  loadNotifSettings,
+  playNotifSound,
+  type NotifSettings,
+  type NotifKind,
+} from "./components/Notifications";
 import FeedPage from "./pages/FeedPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
@@ -44,13 +54,19 @@ export default function App() {
   const [profileTarget, setProfileTarget] = useState("");
   const [chatPeer, setChatPeer] = useState("");
   const [unread, setUnread] = useState(0);
-  const [openPeer, setOpenPeer] = useState("");
+  const [readingPeer, setReadingPeer] = useState("");
+  const [hoverTab, setHoverTab] = useState<Tab | null>(null);
   const [incomingMsg, setIncomingMsg] = useState<{ data: any; nonce: number } | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [notifSettings, setNotifSettings] = useState<NotifSettings>(() => loadNotifSettings());
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
+  const { toasts, push: pushToast, close: closeToast } = useToasts();
+  const notifSettingsRef = useRef<NotifSettings>(notifSettings);
   const [loading, setLoading] = useState(false);
   // ws.onmessage 클로저에서 최신 값을 읽기 위한 ref
   const wsRef = useRef<WebSocket | null>(null);
   const tabRef = useRef<Tab>("feed");
-  const openPeerRef = useRef("");
+  const readingPeerRef = useRef("");
   const userIdRef = useRef("");
   const nonceRef = useRef(0);
   // 회원가입 관심 분야 선택 단계
@@ -84,12 +100,13 @@ export default function App() {
   useEffect(() => {
     tabRef.current = tab;
     userIdRef.current = userId;
-    openPeerRef.current = openPeer;
+    readingPeerRef.current = readingPeer;
+    notifSettingsRef.current = notifSettings;
   });
 
-  // 채팅 탭을 벗어나면 '열린 대화' 해제 → 이후 수신 메시지는 안 읽음으로 집계
+  // 채팅 탭을 벗어나면 '읽는 중' 해제 → 이후 수신 메시지는 안 읽음으로 집계
   useEffect(() => {
-    if (tab !== "chat") setOpenPeer("");
+    if (tab !== "chat") setReadingPeer("");
   }, [tab]);
 
   // 안 읽은 메시지 수: 탭 전환 시 + 주기적으로 갱신(보정)
@@ -103,6 +120,27 @@ export default function App() {
       getUnreadCount()
         .then((r) => {
           if (alive) setUnread(r.unread);
+        })
+        .catch(() => {});
+    refresh();
+    const id = window.setInterval(refresh, 15000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [loggedIn, tab]);
+
+  // 접속 중인 유저 목록(초록불) 주기적 폴링
+  useEffect(() => {
+    if (!loggedIn) {
+      setOnlineUsers([]);
+      return;
+    }
+    let alive = true;
+    const refresh = () =>
+      getOnlineUsers()
+        .then((r) => {
+          if (alive) setOnlineUsers(r.usernames || []);
         })
         .catch(() => {});
     refresh();
@@ -131,18 +169,34 @@ export default function App() {
       } catch {
         return;
       }
+      // 알림(상호작용) 메시지는 우상단 토스트로
+      if (data.type === "notification") {
+        const kind = (data.kind || "comment") as NotifKind;
+        nonceRef.current += 1;
+        const toast = {
+          id: `${data.created_at ?? 0}-${nonceRef.current}`,
+          kind,
+          from_username: data.from_username ?? "",
+          content: data.content ?? "",
+          post_id: data.post_id ?? null,
+          created_at: data.created_at ?? 0,
+        };
+        pushToast(toast);
+        playNotifSound(kind, notifSettingsRef.current);
+        return;
+      }
       if (data.type !== "message" && data.type !== "echo") return;
       // ChatPage로 전달
       nonceRef.current += 1;
       setIncomingMsg({ data, nonce: nonceRef.current });
       // 안 읽음 배지: 내가 받은(상대가 보낸) 메시지만
       if (data.type === "message" && data.sender_id !== userIdRef.current) {
-        const viewing =
+        // '읽음' 기준 = 해당 상대의 입력칸에 포커스(클릭)한 상태
+        const reading =
           tabRef.current === "chat" &&
-          openPeerRef.current &&
-          data.sender_username === openPeerRef.current;
-        if (viewing) {
-          // 이미 대화창을 보고 있으면 즉시 읽음 처리
+          readingPeerRef.current &&
+          data.sender_username === readingPeerRef.current;
+        if (reading) {
           markConversationRead(data.sender_username).catch(() => {});
         } else {
           setUnread((u) => u + 1);
@@ -550,7 +604,8 @@ export default function App() {
                     if (n.id === "profile") setProfileTarget(username);
                     setTab(n.id);
                   }}
-                  title={n.label}
+                  onMouseEnter={() => setHoverTab(n.id)}
+                  onMouseLeave={() => setHoverTab((h) => (h === n.id ? null : h))}
                   style={{
                     position: "relative",
                     padding: isMobile ? "8px 9px" : "8px 14px",
@@ -563,6 +618,27 @@ export default function App() {
                   }}
                 >
                   {n.icon}
+                  {hoverTab === n.id && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 6px)",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        background: "rgba(0,0,0,0.82)",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        whiteSpace: "nowrap",
+                        pointerEvents: "none",
+                        zIndex: 50,
+                      }}
+                    >
+                      {n.label}
+                    </span>
+                  )}
                   {showBadge && (
                     <span
                       style={{
@@ -590,6 +666,13 @@ export default function App() {
             })}
           </nav>
           <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexShrink: 0 }}>
+            <button
+              onClick={() => setShowNotifSettings(true)}
+              title="알림 설정"
+              style={{ fontSize: 17, color: "var(--ig-text-muted)", padding: "2px 4px" }}
+            >
+              🔔
+            </button>
             <Avatar username={username} size={28} src={myAvatar} onClick={() => { setProfileTarget(username); setTab("profile"); }} />
             <button
               onClick={logout}
@@ -616,7 +699,8 @@ export default function App() {
             onConversationRead={refreshUnread}
             incoming={incomingMsg}
             wsSend={wsSend}
-            onActivePeer={setOpenPeer}
+            onReadingPeer={setReadingPeer}
+            onlineUsers={onlineUsers}
           />
         )}
         {tab === "profile" && (
@@ -630,6 +714,23 @@ export default function App() {
           />
         )}
       </main>
+
+      <NotificationStack
+        toasts={toasts}
+        settings={notifSettings}
+        onClose={closeToast}
+        onOpen={(t) => {
+          closeToast(t.id);
+          if (t.from_username) openProfile(t.from_username);
+        }}
+      />
+      {showNotifSettings && (
+        <NotifSettingsPanel
+          settings={notifSettings}
+          onChange={setNotifSettings}
+          onClose={() => setShowNotifSettings(false)}
+        />
+      )}
     </div>
   );
 }
