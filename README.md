@@ -42,22 +42,38 @@ LLM(Upstage Solar)의 출력이 직접 구현한 자료구조의 입력으로 �
 
 ## 실행 방법
 
-### 사전 준비
+실행은 두 가지로 나뉩니다. **그냥 앱을 쓰려면 "사용자용"**, **코드를 고치려면 "개발자용"** 을 따르세요.
+
+### 🟢 사용자용 — 그냥 사용하기
+
+배포된 사이트에 접속만 하면 됩니다. 설치 불필요.
+
+- 웹앱: **https://algosns-web.onrender.com/**
+
+> ⚠️ Render free 플랜이라 일정 시간 미사용 시 백엔드가 잠듭니다.
+> 첫 접속/첫 로그인 시 서버가 깨어나는 데 **30초~1분** 걸릴 수 있습니다(이후엔 정상 속도).
+> (백엔드 API 주소: `https://algosns-api.onrender.com`)
+
+### 🛠 개발자용 — 로컬에서 코드 수정·실행
+
+코드를 직접 고치고 테스트할 때 사용합니다. 내 컴퓨터에만 뜨는 주소(`localhost`)로 실행되며,
+배포 사이트와는 별개입니다. 수정 → 로컬 확인 → `git push` 하면 Render가 자동 재배포합니다.
+
+**사전 준비** (`backend/.env` 생성)
 
 ```bash
-# backend/.env 생성
 SOLAR_API_KEY=your_api_key_here   # 없어도 동작하나 Solar 기반 기능은 fallback
 ```
 
-### Backend
+**Backend**
 
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 8000   # → http://localhost:8000
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend
@@ -65,9 +81,7 @@ npm install
 npm run dev        # → http://localhost:5173
 ```
 
-### 더미 데이터
-
-AI 더미 유저는 백엔드 시작(lifespan)에서 자동 시드됩니다(`backend/routers/admin.py`).
+> AI 더미 유저는 백엔드 시작(lifespan)에서 자동 시드됩니다(`backend/routers/admin.py`).
 
 ## API 엔드포인트 (요약)
 
