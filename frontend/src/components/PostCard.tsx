@@ -1,7 +1,39 @@
 import { useState, useEffect } from "react";
-import type { Post, Comment } from "../api/client";
-import { likePost, getComments, createComment, createReply, deleteComment } from "../api/client";
+import type { Post, Comment, UserMini } from "../api/client";
+import {
+  likePost,
+  getComments,
+  createComment,
+  createReply,
+  deleteComment,
+  getPostLikers,
+} from "../api/client";
 import Avatar from "./Avatar";
+
+// 본문에서 검색어와 일치하는 부분을 볼드 처리
+function highlightText(text: string, query?: string): React.ReactNode {
+  const q = (query ?? "").trim();
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  const ql = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const idx = lower.indexOf(ql, i);
+    if (idx === -1) {
+      parts.push(text.slice(i));
+      break;
+    }
+    if (idx > i) parts.push(text.slice(i, idx));
+    parts.push(
+      <b key={idx} style={{ fontWeight: 800, background: "rgba(0,149,246,0.15)" }}>
+        {text.slice(idx, idx + q.length)}
+      </b>,
+    );
+    i = idx + q.length;
+  }
+  return parts;
+}
 
 function relativeTime(ts: number): string {
   const diff = Date.now() / 1000 - ts;
@@ -130,6 +162,7 @@ export default function PostCard({
   currentAvatar,
   onDelete,
   onOpenProfile,
+  highlight,
 }: {
   post: Post;
   currentUserId: string;
@@ -137,6 +170,7 @@ export default function PostCard({
   currentAvatar?: string | null;
   onDelete?: (id: string) => void;
   onOpenProfile?: (username: string) => void;
+  highlight?: string;
 }) {
   const [likes, setLikes] = useState(post.likes);
   const [liked, setLiked] = useState(Boolean(post.liked_by_me));
@@ -147,6 +181,8 @@ export default function PostCard({
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [imgError, setImgError] = useState(false);
+  const [showLikers, setShowLikers] = useState(false);
+  const [likers, setLikers] = useState<UserMini[]>([]);
   const authorName = post.author_username ?? post.author_id.slice(0, 8);
   const isMine = post.author_id === currentUserId;
 
@@ -193,6 +229,16 @@ export default function PostCard({
   const handleDeleteComment = async (commentId: string) => {
     await deleteComment(commentId);
     await refreshComments();
+  };
+
+  const openLikers = async () => {
+    if (likes <= 0) return;
+    try {
+      setLikers(await getPostLikers(post.id));
+    } catch {
+      setLikers([]);
+    }
+    setShowLikers(true);
   };
 
   const heartColor = liked || likeHover ? "var(--ig-danger)" : "var(--ig-text)";
@@ -290,9 +336,21 @@ export default function PostCard({
             </span>
           </button>
         </div>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+        <button
+          onClick={openLikers}
+          disabled={likes <= 0}
+          style={{
+            fontWeight: 600,
+            fontSize: 14,
+            marginBottom: 4,
+            color: "var(--ig-text)",
+            cursor: likes > 0 ? "pointer" : "default",
+            padding: 0,
+          }}
+          title={likes > 0 ? "좋아요 누른 사람 보기" : undefined}
+        >
           좋아요 {likes.toLocaleString()}개
-        </div>
+        </button>
         <div style={{ fontSize: 14, lineHeight: 1.45, whiteSpace: "pre-wrap" }}>
           <span
             onClick={onOpenProfile ? () => onOpenProfile(authorName) : undefined}
@@ -300,7 +358,7 @@ export default function PostCard({
           >
             {authorName}
           </span>
-          {post.content}
+          {highlightText(post.content, highlight)}
         </div>
         {post.hashtags.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
@@ -382,6 +440,105 @@ export default function PostCard({
           ↑
         </button>
       </div>
+
+      {showLikers && (
+        <div
+          onClick={() => setShowLikers(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="ig-card"
+            style={{
+              width: "100%",
+              maxWidth: 400,
+              maxHeight: "70vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <header
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid var(--ig-border)",
+                fontWeight: 700,
+                textAlign: "center",
+                position: "relative",
+              }}
+            >
+              좋아요
+              <button
+                onClick={() => setShowLikers(false)}
+                style={{
+                  position: "absolute",
+                  right: 14,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  fontSize: 18,
+                  color: "var(--ig-text-muted)",
+                }}
+              >
+                ✕
+              </button>
+            </header>
+            <div className="ig-scrollbar" style={{ overflowY: "auto", flex: 1 }}>
+              {likers.length === 0 ? (
+                <p style={{ textAlign: "center", padding: 30, color: "var(--ig-text-muted)" }}>
+                  아직 좋아요가 없습니다.
+                </p>
+              ) : (
+                likers.map((u) => (
+                  <button
+                    key={u.username}
+                    onClick={() => {
+                      setShowLikers(false);
+                      onOpenProfile?.(u.username);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 16px",
+                      width: "100%",
+                      textAlign: "left",
+                      borderTop: "1px solid var(--ig-border-soft)",
+                    }}
+                  >
+                    <Avatar username={u.username} size={40} src={u.avatar_base64} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{u.username}</div>
+                      {u.bio && (
+                        <div
+                          style={{
+                            color: "var(--ig-text-muted)",
+                            fontSize: 12,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {u.bio}
+                        </div>
+                      )}
+                    </div>
+                    {u.is_ai && <span className="ig-chip ig-chip-tag" style={{ fontSize: 10 }}>AI</span>}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

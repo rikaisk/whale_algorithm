@@ -280,7 +280,7 @@ export default function SearchPage({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="유저나 게시물 검색 (한글/영문)"
+                placeholder="유저나 게시물 검색"
                 style={{ flex: 1, border: "none", background: "transparent", fontSize: 14 }}
                 autoFocus
               />
@@ -469,6 +469,7 @@ export default function SearchPage({
                         currentUsername={currentUsername}
                         currentAvatar={currentAvatar}
                         onOpenProfile={onOpenProfile}
+                        highlight={query}
                       />
                     </div>
                   ))}

@@ -74,6 +74,7 @@ export interface ConversationSummary {
   peer_username: string;
   last_content: string;
   last_at: number;
+  unread?: number;
 }
 
 // Auth
@@ -165,6 +166,9 @@ export const likePost = (
 export const getFeed = (username: string): Promise<Post[]> =>
   api.get(`/feed/${username}`).then((r) => r.data);
 
+export const getPostLikers = (post_id: string): Promise<UserMini[]> =>
+  api.get(`/posts/${post_id}/likers`).then((r) => r.data);
+
 // Search
 export const searchUsers = (q: string) =>
   api.get("/search/users", { params: { q } }).then((r) => r.data);
@@ -232,6 +236,9 @@ export const listConversations = (): Promise<ConversationSummary[]> =>
 
 export const getUnreadCount = (): Promise<{ unread: number }> =>
   api.get("/messages/unread_count").then((r) => r.data);
+
+export const markConversationRead = (peer_username: string): Promise<{ read: number }> =>
+  api.post(`/messages/${peer_username}/read`).then((r) => r.data);
 
 // 서버에 보관되는 개인 데이터 (검색 기록 / 가이드봇 대화)
 export const fetchSearchHistory = (): Promise<any[]> =>

@@ -304,7 +304,7 @@ export default function RecommendPage({
             style={{ padding: 14, marginBottom: 14, background: "#eef2ff", borderColor: "#c7d2fe" }}
           >
             <h3 style={{ margin: "0 0 4px", fontSize: 15, color: "#3730a3" }}>
-              🧭 가까운 친구 찾기 (Dijkstra)
+              🧭 가까운 친구 찾기
             </h3>
             <p style={{ margin: 0, fontSize: 13, color: "#4338ca", lineHeight: 1.5 }}>
               팔로우 관계를 따라, <b>공통 관심사가 많을수록 가까운 사이</b>로 보는 가중치로

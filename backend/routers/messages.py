@@ -223,9 +223,33 @@ def get_conversation(
     return conversation
 
 
+@router.post("/messages/{peer_username}/read")
+def mark_conversation_read(
+    peer_username: str,
+    user_id: str = Depends(auth.get_current_user),
+):
+    """상대(peer)가 보낸 메시지를 모두 읽음 처리."""
+    peer_id = _username_to_id(peer_username)
+    if peer_id is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    changed = 0
+    for msg in message_store.values():
+        if msg.sender_id == peer_id and msg.receiver_id == user_id and not msg.read:
+            msg.read = True
+            message_store.set(msg.id, msg)
+            changed += 1
+    if changed:
+        try:
+            persistence.save_all()
+        except Exception:
+            pass
+    return {"read": changed}
+
+
 @router.get("/messages")
 def list_conversations(user_id: str = Depends(auth.get_current_user)):
     peers: dict[str, dict] = {}
+    unread_by_peer: dict[str, int] = {}
     for msg in message_store.values():
         if msg.sender_id == user_id:
             peer_id = msg.receiver_id
@@ -233,6 +257,9 @@ def list_conversations(user_id: str = Depends(auth.get_current_user)):
             peer_id = msg.sender_id
         else:
             continue
+        # 상대가 보냈고 아직 안 읽은 메시지 수 집계
+        if msg.sender_id == peer_id and msg.receiver_id == user_id and not msg.read:
+            unread_by_peer[peer_id] = unread_by_peer.get(peer_id, 0) + 1
         existing = peers.get(peer_id)
         if existing is None or msg.created_at > existing["last_at"]:
             peers[peer_id] = {
@@ -241,6 +268,8 @@ def list_conversations(user_id: str = Depends(auth.get_current_user)):
                 "last_content": msg.content,
                 "last_at": msg.created_at,
             }
+    for pid, info in peers.items():
+        info["unread"] = unread_by_peer.get(pid, 0)
     return sorted(peers.values(), key=lambda x: x["last_at"], reverse=True)
 
 

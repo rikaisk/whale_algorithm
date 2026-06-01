@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   registerUser,
   login as apiLogin,
@@ -8,6 +8,8 @@ import {
   getToken,
   getInterestCategories,
   getUnreadCount,
+  markConversationRead,
+  openMessageSocket,
   userExists,
   type InterestCategory,
 } from "./api/client";
@@ -42,7 +44,15 @@ export default function App() {
   const [profileTarget, setProfileTarget] = useState("");
   const [chatPeer, setChatPeer] = useState("");
   const [unread, setUnread] = useState(0);
+  const [openPeer, setOpenPeer] = useState("");
+  const [incomingMsg, setIncomingMsg] = useState<{ data: any; nonce: number } | null>(null);
   const [loading, setLoading] = useState(false);
+  // ws.onmessage 클로저에서 최신 값을 읽기 위한 ref
+  const wsRef = useRef<WebSocket | null>(null);
+  const tabRef = useRef<Tab>("feed");
+  const openPeerRef = useRef("");
+  const userIdRef = useRef("");
+  const nonceRef = useRef(0);
   // 회원가입 관심 분야 선택 단계
   const [regStep, setRegStep] = useState<0 | 1>(0);
   const [categories, setCategories] = useState<InterestCategory[]>([]);
@@ -70,7 +80,19 @@ export default function App() {
     getMe().then((me) => setMyAvatar(me.avatar_base64 ?? null)).catch(() => {});
   }, [tab, loggedIn]);
 
-  // 안 읽은 메시지 수: 탭 전환 시 + 주기적으로 갱신
+  // ref 동기화
+  useEffect(() => {
+    tabRef.current = tab;
+    userIdRef.current = userId;
+    openPeerRef.current = openPeer;
+  });
+
+  // 채팅 탭을 벗어나면 '열린 대화' 해제 → 이후 수신 메시지는 안 읽음으로 집계
+  useEffect(() => {
+    if (tab !== "chat") setOpenPeer("");
+  }, [tab]);
+
+  // 안 읽은 메시지 수: 탭 전환 시 + 주기적으로 갱신(보정)
   useEffect(() => {
     if (!loggedIn) {
       setUnread(0);
@@ -84,12 +106,54 @@ export default function App() {
         })
         .catch(() => {});
     refresh();
-    const id = window.setInterval(refresh, 12000);
+    const id = window.setInterval(refresh, 15000);
     return () => {
       alive = false;
       window.clearInterval(id);
     };
   }, [loggedIn, tab]);
+
+  // 메시지 WebSocket을 앱 전역에서 단일 연결로 유지(어느 탭이든 실시간 알림)
+  useEffect(() => {
+    if (!loggedIn) {
+      wsRef.current?.close();
+      wsRef.current = null;
+      return;
+    }
+    const token = getToken();
+    if (!token) return;
+    const ws = openMessageSocket(token);
+    wsRef.current = ws;
+    ws.onmessage = (e) => {
+      let data: any;
+      try {
+        data = JSON.parse(e.data);
+      } catch {
+        return;
+      }
+      if (data.type !== "message" && data.type !== "echo") return;
+      // ChatPage로 전달
+      nonceRef.current += 1;
+      setIncomingMsg({ data, nonce: nonceRef.current });
+      // 안 읽음 배지: 내가 받은(상대가 보낸) 메시지만
+      if (data.type === "message" && data.sender_id !== userIdRef.current) {
+        const viewing =
+          tabRef.current === "chat" &&
+          openPeerRef.current &&
+          data.sender_username === openPeerRef.current;
+        if (viewing) {
+          // 이미 대화창을 보고 있으면 즉시 읽음 처리
+          markConversationRead(data.sender_username).catch(() => {});
+        } else {
+          setUnread((u) => u + 1);
+        }
+      }
+    };
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [loggedIn]);
 
   // 회원가입 모드에서 유저명 중복을 입력창에서 실시간(디바운스) 안내
   useEffect(() => {
@@ -201,6 +265,13 @@ export default function App() {
     getUnreadCount()
       .then((r) => setUnread(r.unread))
       .catch(() => {});
+  };
+
+  const wsSend = (payload: any) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(payload));
+    }
   };
 
   if (!loggedIn) {
@@ -543,6 +614,9 @@ export default function App() {
             initialPeer={chatPeer}
             onPeerConsumed={() => setChatPeer("")}
             onConversationRead={refreshUnread}
+            incoming={incomingMsg}
+            wsSend={wsSend}
+            onActivePeer={setOpenPeer}
           />
         )}
         {tab === "profile" && (

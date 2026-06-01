@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   listConversations,
   getConversation,
-  openMessageSocket,
-  getToken,
   userExists,
   searchUsers,
   type ConversationSummary,
@@ -27,6 +25,9 @@ export default function ChatPage({
   initialPeer,
   onPeerConsumed,
   onConversationRead,
+  incoming,
+  wsSend,
+  onActivePeer,
 }: {
   username: string;
   userId: string;
@@ -34,6 +35,9 @@ export default function ChatPage({
   initialPeer?: string;
   onPeerConsumed?: () => void;
   onConversationRead?: () => void;
+  incoming?: { data: any; nonce: number } | null;
+  wsSend?: (payload: any) => void;
+  onActivePeer?: (peer: string) => void;
 }) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [peer, setPeer] = useState<string>("");
@@ -45,9 +49,9 @@ export default function ChatPage({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const isMobile = useIsMobile();
-  const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const peerRef = useRef("");
 
   // 프로필의 '메시지 보내기'로 진입 시 해당 유저와 바로 대화 시작
   useEffect(() => {
@@ -72,41 +76,38 @@ export default function ChatPage({
     refreshConversations();
   }, []);
 
+  // 현재 열려있는 대화 상대를 App에 알림(전역 ws가 읽음/배지 판단에 사용)
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    const ws = openMessageSocket(token);
-    wsRef.current = ws;
+    peerRef.current = peer;
+    onActivePeer?.(peer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peer]);
 
-    ws.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        if (data.type !== "message" && data.type !== "echo") return;
-        const msg: DmMessage = {
-          id: data.id,
-          sender_id: data.sender_id,
-          receiver_id: data.receiver_id,
-          content: data.content,
-          image_url: data.image_url ?? null,
-          created_at: data.created_at,
-          read: false,
-        };
-        const otherUsername: string | undefined =
-          data.sender_id === userId ? undefined : data.sender_username;
-        if (otherUsername && (!peer || otherUsername === peer)) {
-          setMessages((prev) => [...prev, msg]);
-        } else if (data.sender_id === userId && peer) {
-          setMessages((prev) => [...prev, msg]);
-        }
-        refreshConversations();
-      } catch {}
+  // App의 전역 WebSocket이 전달한 수신 메시지 처리
+  useEffect(() => {
+    if (!incoming) return;
+    const data = incoming.data;
+    if (data.type !== "message" && data.type !== "echo") return;
+    const msg: DmMessage = {
+      id: data.id,
+      sender_id: data.sender_id,
+      receiver_id: data.receiver_id,
+      content: data.content,
+      image_url: data.image_url ?? null,
+      created_at: data.created_at,
+      read: false,
     };
-
-    ws.onerror = () => setError("실시간 연결에 문제가 있습니다.");
-    return () => {
-      ws.close();
-    };
-  }, [userId, peer]);
+    const cur = peerRef.current;
+    const otherUsername: string | undefined =
+      data.sender_id === userId ? undefined : data.sender_username;
+    if (otherUsername && cur && otherUsername === cur) {
+      setMessages((prev) => [...prev, msg]);
+    } else if (data.sender_id === userId && cur) {
+      setMessages((prev) => [...prev, msg]);
+    }
+    refreshConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming?.nonce]);
 
   useEffect(() => {
     if (!peer) {
@@ -116,8 +117,9 @@ export default function ChatPage({
     getConversation(peer)
       .then((msgs) => {
         setMessages(msgs);
-        // 대화를 열면 서버에서 읽음 처리됨 → 안 읽은 배지 갱신
+        // 대화를 열면 서버에서 읽음 처리됨 → 총 배지 + 좌측 목록 갱신
         onConversationRead?.();
+        refreshConversations();
       })
       .catch(() => setMessages([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,12 +155,11 @@ export default function ChatPage({
   const send = () => {
     const content = draft.trim();
     if (!content || !peer) return;
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
+    if (!wsSend) {
       setError("연결이 끊겼습니다. 새로고침 해주세요.");
       return;
     }
-    ws.send(JSON.stringify({ to_username: peer, content }));
+    wsSend({ to_username: peer, content });
     setDraft("");
   };
 
@@ -325,10 +326,13 @@ export default function ChatPage({
                 >
                   <Avatar username={c.peer_username} size={44} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{c.peer_username}</div>
+                    <div style={{ fontWeight: (c.unread ?? 0) > 0 ? 700 : 600, fontSize: 14 }}>
+                      {c.peer_username}
+                    </div>
                     <div
                       style={{
-                        color: "var(--ig-text-muted)",
+                        color: (c.unread ?? 0) > 0 ? "var(--ig-text)" : "var(--ig-text-muted)",
+                        fontWeight: (c.unread ?? 0) > 0 ? 600 : 400,
                         fontSize: 12,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -338,6 +342,26 @@ export default function ChatPage({
                       {c.last_content} · {relTime(c.last_at)}
                     </div>
                   </div>
+                  {(c.unread ?? 0) > 0 && (
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        minWidth: 18,
+                        height: 18,
+                        padding: "0 5px",
+                        borderRadius: 9,
+                        background: "#ed4956",
+                        color: "#fff",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        lineHeight: "18px",
+                        textAlign: "center",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {(c.unread ?? 0) > 99 ? "99+" : c.unread}
+                    </span>
+                  )}
                 </button>
               );
             })

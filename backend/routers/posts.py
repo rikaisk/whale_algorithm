@@ -146,6 +146,26 @@ def like_post(
     return {"post_id": post_id, "likes": post.likes, "liked_by_me": liked}
 
 
+@router.get("/posts/{post_id}/likers")
+def get_likers(post_id: str):
+    """게시물에 좋아요를 누른 유저 목록."""
+    if not post_store.exists(post_id):
+        raise HTTPException(status_code=404, detail="Post not found")
+    post = post_store.get(post_id)
+    id_to_user = {u.id: u for u in user_store.values()}
+    out = []
+    for uid in post.liked_by:
+        u = id_to_user.get(uid)
+        if u:
+            out.append({
+                "username": u.username,
+                "avatar_base64": u.avatar_base64,
+                "is_ai": u.is_ai,
+                "bio": u.bio,
+            })
+    return out
+
+
 @router.get("/feed/{username}")
 def get_feed(
     username: str,
