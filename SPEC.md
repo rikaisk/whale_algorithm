@@ -54,14 +54,15 @@ whale_algorithm/
 │   ├── hooks/useIsMobile.ts   # 반응형 분기
 │   ├── components/
 │   │   ├── Avatar.tsx
-│   │   ├── PostCard.tsx       # 게시물 카드(좋아요/댓글/멘션/하이라이트/AI뱃지)
-│   │   └── Notifications.tsx  # 알림 토스트 스택 + 설정(투명도/소리)
+│   │   ├── PostCard.tsx       # 게시물 카드(좋아요/댓글/멘션/하이라이트/AI뱃지, 댓글 자동펼침·강조)
+│   │   ├── PostFocusModal.tsx # 알림 클릭 시 근원 게시물+해당 댓글로 이동하는 모달
+│   │   └── Notifications.tsx  # 알림 토스트 스택 + 설정(모두끄기/유지시간/표시·투명도/소리·음량)
 │   └── pages/
 │       ├── FeedPage.tsx       # 피드 + 작성
 │       ├── ProfilePage.tsx    # 프로필 + 게시물 그리드
 │       ├── SearchPage.tsx     # 검색 + 가이드봇
-│       ├── RecommendPage.tsx  # 게시물/사람/가까운 친구 추천
-│       └── ChatPage.tsx       # 메시지(DM)
+│       ├── RecommendPage.tsx  # 친구/게시물/가까운 친구 추천(기본 탭=친구)
+│       └── ChatPage.tsx       # 메시지(DM, 대화별 스크롤 위치 보존)
 └── tests/                     # 알고리즘 단위 테스트(pytest)
 ```
 
@@ -172,7 +173,8 @@ social_graph  = Graph()        # 팔로우 방향 그래프
 - WhaleGram 사용법 안내. **세션 분리 + 대화 내역 서버 저장**, 범용 예시 질문을 상황에 따라 무작위 노출,
   답변 후에도 예시 질문 유지. Solar에 대화 history 전달로 문맥 유지.
 
-### 7. 추천 (`recommend.py`)
+### 7. 추천 (`recommend.py`, `RecommendPage.tsx`)
+- 탭 순서 **친구 → 게시물 → 가까운 친구**, 진입 시 **기본 탭은 '친구'**(`RecommendPage.tsx`).
 - **관심 분야 기반**: 선택한 분야와 맞는 AI 유저의 게시물('관심 있을 수도 있는 게시물')과
   사람('관심사가 비슷한 유저')을 섹션 헤더로 노출. 건너뛴 경우 무작위 '추천 친구'.
   신규 실제 유저는 최근 가입순으로 최상단.
@@ -186,10 +188,17 @@ social_graph  = Graph()        # 팔로우 방향 그래프
   **'읽음' 기준 = 해당 대화 입력칸 포커스**.
 - 좌측 대화자창 '‹'로 접기(아바타만)/펼치기, 새 메시지 자동 스크롤 대신 ↓ 버튼.
 - 모바일에서는 목록↔대화 단일 화면(‹ 뒤로가기).
+- **대화별 스크롤 위치 + 마지막으로 보던 대화 보존**(localStorage), 재진입 시 보던 위치로 복원.
 
 ### 9. 알림 (`Notifications.tsx` + ws `notification`)
-- 댓글/답글/멘션 발생 시 **우상단 반투명 토스트가 위에서 드롭**(newest가 위, 기존 것을 아래로 밀어냄).
-- 상호작용 종류별 **투명도 슬라이더 + 알림음 on/off** 설정(🔔, WebAudio 합성음), localStorage 보관.
+- 댓글/답글/멘션 발생 시 **우하단 반투명 토스트가 아래에서 위로 떠오름**(newest가 아래, 기존 것을 위로 밀어냄).
+- **클릭 시 근원지로 이동**: `GET /posts/{id}`로 단일 게시물을 모달로 띄우고 해당 댓글로 스크롤·강조.
+  알림 payload에 `post_id`·`comment_id` 포함(본문 멘션은 `comment_id=None`).
+- **우선순위 병합**: 같은 근원(`post_id|comment_id|from_username`)의 알림은
+  `내 게시물 댓글 < 내 댓글 답글 < 회원님 언급` 중 **가장 높은 것만** 표시.
+- 설정(🔔, localStorage `wg_notif_settings`): **모두 끄기** 체크박스, **유지 시간 1~15초** 슬라이더,
+  종류별 **표시여부 체크박스 + 투명도 0~100%**(클수록 투명, 100%면 안 보임),
+  **음소거 체크박스 + 음량 0~100%**(WebAudio 합성음 크기 반영).
 
 ### 10. 멘션 (`mentions.py`)
 - 본문 `@유저명`으로 **비AI 실제 유저** 멘션 → 프로필 링크 + 멘션 알림.
@@ -220,6 +229,7 @@ PATCH /users/{username}/bio | /avatar
 
 # posts / comments
 POST /posts, DELETE /posts/{id}, POST /posts/{id}/like
+GET  /posts/{id}                          # 단일 게시물(알림 클릭 → 근원지 이동)
 GET  /posts/{id}/likers, GET /feed/{username}
 POST /posts/{id}/comments, POST /comments/{id}/replies
 POST /comments/{id}/like, DELETE /comments/{id}, GET /posts/{id}/comments
