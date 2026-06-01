@@ -18,6 +18,7 @@ import {
 } from "../api/botSessions";
 import PostCard from "../components/PostCard";
 import Avatar from "../components/Avatar";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 type Tab = "all" | "bot";
 
@@ -56,6 +57,7 @@ export default function SearchPage({
   onOpenProfile?: (username: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("all");
+  const isMobile = useIsMobile();
   const [query, setQuery] = useState("");
   const [userResults, setUserResults] = useState<string[]>([]);
   const [postResults, setPostResults] = useState<Post[]>([]);
@@ -229,12 +231,14 @@ export default function SearchPage({
       <button
         onClick={() => setTab(id)}
         style={{
-          padding: "10px 18px",
+          padding: isMobile ? "10px 8px" : "10px 18px",
           borderBottom: active ? "2px solid var(--ig-text)" : "2px solid transparent",
           color: active ? "var(--ig-text)" : "var(--ig-text-muted)",
           fontWeight: active ? 700 : 600,
           fontSize: 13,
           letterSpacing: 0.5,
+          whiteSpace: "nowrap",
+          flexShrink: 0,
         }}
       >
         {label}
@@ -250,7 +254,8 @@ export default function SearchPage({
           borderBottom: "1px solid var(--ig-border)",
           marginBottom: 16,
           justifyContent: "center",
-          gap: 24,
+          gap: isMobile ? 6 : 24,
+          overflowX: "auto",
         }}
       >
         {tabBtn("all", "검색")}
@@ -487,9 +492,9 @@ export default function SearchPage({
           style={{
             display: "flex",
             flexDirection: "column",
-            height: "calc(100vh - 180px)",
-            minHeight: 480,
-            maxHeight: 720,
+            height: isMobile ? "calc(100vh - 150px)" : "calc(100vh - 180px)",
+            minHeight: isMobile ? 360 : 480,
+            maxHeight: isMobile ? "none" : 720,
             overflow: "hidden",
           }}
         >

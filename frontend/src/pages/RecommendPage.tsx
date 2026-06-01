@@ -8,6 +8,7 @@ import {
 } from "../api/client";
 import PostCard from "../components/PostCard";
 import Avatar from "../components/Avatar";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 type Tab = "posts" | "people" | "closest";
 
@@ -48,6 +49,7 @@ export default function RecommendPage({
   const [loading, setLoading] = useState(false);
   const [loadedTabs, setLoadedTabs] = useState<Set<Tab>>(new Set());
   const [activeTab, setActiveTab] = useState<Tab>("posts");
+  const isMobile = useIsMobile();
 
   const loadPosts = async () => {
     setLoading(true);
@@ -102,12 +104,14 @@ export default function RecommendPage({
       <button
         onClick={() => setActiveTab(id)}
         style={{
-          padding: "10px 18px",
+          padding: isMobile ? "10px 8px" : "10px 18px",
           borderBottom: active ? "2px solid var(--ig-text)" : "2px solid transparent",
           color: active ? "var(--ig-text)" : "var(--ig-text-muted)",
           fontWeight: active ? 700 : 600,
           fontSize: 13,
           letterSpacing: 0.5,
+          whiteSpace: "nowrap",
+          flexShrink: 0,
         }}
       >
         {label}
@@ -200,7 +204,8 @@ export default function RecommendPage({
           borderBottom: "1px solid var(--ig-border)",
           marginBottom: 16,
           justifyContent: "center",
-          gap: 24,
+          gap: isMobile ? 6 : 24,
+          overflowX: "auto",
         }}
       >
         {tabBtn("posts", "✨ 게시물")}

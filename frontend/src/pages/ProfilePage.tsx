@@ -13,6 +13,7 @@ import {
 } from "../api/client";
 import Avatar from "../components/Avatar";
 import PostCard from "../components/PostCard";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const MAX_AVATAR_BYTES = 1_000_000;
 
@@ -45,6 +46,7 @@ export default function ProfilePage({
   const [listItems, setListItems] = useState<UserMini[]>([]);
   const [failedImgs, setFailedImgs] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const isMobile = useIsMobile();
 
   const isSelf = currentUsername === targetUsername;
 
@@ -141,11 +143,11 @@ export default function ProfilePage({
 
   return (
     <div style={{ maxWidth: 740, margin: "0 auto" }}>
-      <section style={{ display: "flex", gap: 36, padding: "20px 16px 32px", alignItems: "flex-start" }}>
-        <div style={{ position: "relative" }}>
+      <section style={{ display: "flex", gap: isMobile ? 18 : 36, padding: isMobile ? "12px 6px 24px" : "20px 16px 32px", alignItems: "flex-start" }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
           <Avatar
             username={profile.username}
-            size={150}
+            size={isMobile ? 84 : 150}
             ring
             src={editBio ? avatarDraft : profile.avatar_base64 ?? null}
           />
@@ -178,7 +180,7 @@ export default function ProfilePage({
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
-            <h2 style={{ margin: 0, fontWeight: 300, fontSize: 28 }}>{profile.username}</h2>
+            <h2 style={{ margin: 0, fontWeight: 300, fontSize: isMobile ? 20 : 28, wordBreak: "break-all" }}>{profile.username}</h2>
             {profile.is_ai && (
               <span
                 className="ig-chip"

@@ -10,6 +10,7 @@ import {
   type DmMessage,
 } from "../api/client";
 import Avatar from "../components/Avatar";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 function relTime(ts: number): string {
   const diff = Date.now() / 1000 - ts;
@@ -43,6 +44,7 @@ export default function ChatPage({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const isMobile = useIsMobile();
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
@@ -186,16 +188,17 @@ export default function ChatPage({
       className="ig-card"
       style={{
         display: "grid",
-        gridTemplateColumns: "320px 1fr",
-        height: "calc(100vh - 140px)",
-        minHeight: 500,
-        maxHeight: 800,
+        gridTemplateColumns: isMobile ? "1fr" : "320px 1fr",
+        height: isMobile ? "calc(100vh - 92px)" : "calc(100vh - 140px)",
+        minHeight: isMobile ? 360 : 500,
+        maxHeight: isMobile ? "none" : 800,
         overflow: "hidden",
         maxWidth: 900,
         margin: "0 auto",
       }}
     >
-      <aside style={{ borderRight: "1px solid var(--ig-border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      {(!isMobile || !peer) && (
+      <aside style={{ borderRight: isMobile ? "none" : "1px solid var(--ig-border)", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <header style={{ padding: 14, borderBottom: "1px solid var(--ig-border)", display: "flex", alignItems: "center", gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, flex: 1 }}>{username}</h3>
         </header>
@@ -341,7 +344,9 @@ export default function ChatPage({
           )}
         </div>
       </aside>
+      )}
 
+      {(!isMobile || !!peer) && (
       <section style={{ display: "flex", flexDirection: "column", background: "#fff", minHeight: 0 }}>
         {!peer ? (
           <div
@@ -381,6 +386,19 @@ export default function ChatPage({
               }}
               title={onOpenProfile ? "프로필 보기" : undefined}
             >
+              {isMobile && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPeer("");
+                    setPeerInput("");
+                  }}
+                  title="목록으로"
+                  style={{ fontSize: 22, color: "var(--ig-text)", padding: "0 4px 0 0", lineHeight: 1 }}
+                >
+                  ‹
+                </button>
+              )}
               <Avatar username={peer} size={36} />
               <div style={{ fontWeight: 600, fontSize: 15 }}>{peer}</div>
             </header>
@@ -510,6 +528,7 @@ export default function ChatPage({
           </>
         )}
       </section>
+      )}
     </div>
   );
 }

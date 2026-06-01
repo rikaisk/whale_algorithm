@@ -12,6 +12,7 @@ import {
   type InterestCategory,
 } from "./api/client";
 import Avatar from "./components/Avatar";
+import { useIsMobile } from "./hooks/useIsMobile";
 import FeedPage from "./pages/FeedPage";
 import ProfilePage from "./pages/ProfilePage";
 import SearchPage from "./pages/SearchPage";
@@ -46,6 +47,7 @@ export default function App() {
   const [regStep, setRegStep] = useState<0 | 1>(0);
   const [categories, setCategories] = useState<InterestCategory[]>([]);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const isMobile = useIsMobile();
   // 회원가입 유저명 중복 검사 (입력창에서 실시간 안내)
   const [nameStatus, setNameStatus] = useState<"idle" | "checking" | "taken" | "ok">("idle");
 
@@ -440,12 +442,12 @@ export default function App() {
           style={{
             maxWidth: 935,
             margin: "0 auto",
-            padding: "0 20px",
-            height: 60,
+            padding: isMobile ? "0 12px" : "0 20px",
+            height: isMobile ? 52 : 60,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: isMobile ? 6 : 16,
           }}
         >
           <h1
@@ -454,7 +456,8 @@ export default function App() {
               margin: 0,
               fontFamily: "var(--ig-font-script)",
               fontWeight: 400,
-              fontSize: 28,
+              fontSize: isMobile ? 22 : 28,
+              flexShrink: 0,
               background: "var(--ig-grad-cta)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
@@ -465,7 +468,7 @@ export default function App() {
           >
             WhaleGram
           </h1>
-          <nav style={{ display: "flex", gap: 4 }}>
+          <nav style={{ display: "flex", gap: isMobile ? 0 : 4 }}>
             {NAV.map((n) => {
               const active = tab === n.id;
               const showBadge = n.id === "chat" && unread > 0;
@@ -479,9 +482,9 @@ export default function App() {
                   title={n.label}
                   style={{
                     position: "relative",
-                    padding: "8px 14px",
+                    padding: isMobile ? "8px 9px" : "8px 14px",
                     borderRadius: 8,
-                    fontSize: 18,
+                    fontSize: isMobile ? 20 : 18,
                     color: active ? "var(--ig-text)" : "var(--ig-text-muted)",
                     background: active ? "rgba(0,0,0,0.04)" : "transparent",
                     fontWeight: active ? 700 : 400,
@@ -515,20 +518,20 @@ export default function App() {
               );
             })}
           </nav>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, flexShrink: 0 }}>
             <Avatar username={username} size={28} src={myAvatar} onClick={() => { setProfileTarget(username); setTab("profile"); }} />
             <button
               onClick={logout}
-              style={{ color: "var(--ig-text-muted)", fontSize: 13, fontWeight: 600 }}
+              style={{ color: "var(--ig-text-muted)", fontSize: isMobile ? 18 : 13, fontWeight: 600 }}
               title="로그아웃"
             >
-              로그아웃
+              {isMobile ? "⎋" : "로그아웃"}
             </button>
           </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: 935, margin: "0 auto", padding: "24px 20px" }}>
+      <main style={{ maxWidth: 935, margin: "0 auto", padding: isMobile ? "14px 10px" : "24px 20px" }}>
         {tab === "feed" && <FeedPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
         {tab === "search" && <SearchPage currentUserId={userId} currentUsername={username} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
         {tab === "recommend" && <RecommendPage username={username} userId={userId} currentAvatar={myAvatar} onOpenProfile={openProfile} />}
