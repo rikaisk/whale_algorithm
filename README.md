@@ -1,4 +1,4 @@
-# WhaleGram (whale_algorithm)
+# WhaleGram 
 
 알고리즘 수업 개념을 실제 SNS 기능에 직접 적용한 인스타그램풍 웹 애플리케이션.
 LLM(Upstage Solar)의 출력이 직접 구현한 자료구조의 입력으로 연결되는 구조가 핵심.
